@@ -320,9 +320,13 @@ export default function DashboardClient() {
                 }
               />
               <Tooltip
-                formatter={(value: number, name: string) => {
-                  if (name === "pnl") return [formatMoney(value), "P&L"];
-                  return [value, "Trades"];
+                formatter={(value, name) => {
+                  if (value == null) return ["—", String(name)];
+                  const n =
+                    typeof value === "number" ? value : Number(value);
+                  if (Number.isNaN(n)) return [String(value), String(name)];
+                  if (name === "pnl") return [formatMoney(n), "P&L"];
+                  return [String(n), "Trades"];
                 }}
               />
               <Bar
