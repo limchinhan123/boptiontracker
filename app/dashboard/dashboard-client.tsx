@@ -6,8 +6,8 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  ComposedChart,
   Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -82,11 +82,17 @@ function pnlClass(n: number): string {
 
 type Stats = {
   totalTrades: number;
-  needsReview: number;
-  sheetsErrors: number;
-  totalFees: number;
+  totalRealizedPnl: number;
   byUnderlying: { underlying: string; count: number }[];
+  byMonth: { month: string; count: number; pnl: number }[];
 };
+
+function formatMonthKey(ym: string): string {
+  const [y, m] = ym.split("-");
+  if (!y || !m) return ym;
+  const d = new Date(Number(y), Number(m) - 1, 1);
+  return d.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+}
 
 export default function DashboardClient() {
   const [trades, setTrades] = useState<TradeRow[]>([]);
@@ -158,16 +164,13 @@ export default function DashboardClient() {
     return () => clearInterval(id);
   }, [load]);
 
-  const byDay = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const t of trades) {
-      const d = new Date(t.createdAt).toISOString().slice(0, 10);
-      map.set(d, (map.get(d) ?? 0) + 1);
-    }
-    return [...map.entries()]
-      .map(([date, count]) => ({ date, count }))
-      .sort((a, b) => a.date.localeCompare(b.date));
-  }, [trades]);
+  const monthChartData = useMemo(() => {
+    if (!stats?.byMonth?.length) return [];
+    return stats.byMonth.map((row) => ({
+      ...row,
+      monthLabel: formatMonthKey(row.month),
+    }));
+  }, [stats]);
 
   /** Oldest first so cumulative P&L reads naturally down the page. */
   const tableRows = useMemo(() => {
@@ -262,13 +265,12 @@ export default function DashboardClient() {
       </header>
 
       {stats ? (
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid max-w-2xl gap-4 sm:grid-cols-2">
           <StatCard label="Total trades" value={String(stats.totalTrades)} />
-          <StatCard label="Needs review" value={String(stats.needsReview)} />
-          <StatCard label="Sheets errors" value={String(stats.sheetsErrors)} />
           <StatCard
-            label="Fees (sum)"
-            value={stats.totalFees.toFixed(2)}
+            label="Total profit & loss"
+            value={formatMoney(stats.totalRealizedPnl)}
+            valueClassName={pnlClass(stats.totalRealizedPnl)}
           />
         </section>
       ) : null}
@@ -290,16 +292,56 @@ export default function DashboardClient() {
         </div>
         <div className="h-64 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Trades per day (current filter)
+            Breakdown by month
           </h2>
+          <p className="mb-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+            Bars: trade count · Line: sum of P&amp;L (realized) in that month
+          </p>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={byDay}>
+            <ComposedChart data={monthChartData}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-700" />
-              <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Line type="monotone" dataKey="count" stroke="#059669" dot={false} />
-            </LineChart>
+              <XAxis dataKey="monthLabel" tick={{ fontSize: 10 }} />
+              <YAxis
+                yAxisId="left"
+                allowDecimals={false}
+                tick={{ fontSize: 10 }}
+                width={32}
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tick={{ fontSize: 10 }}
+                width={40}
+                tickFormatter={(v) =>
+                  new Intl.NumberFormat(undefined, {
+                    notation: "compact",
+                    maximumFractionDigits: 1,
+                  }).format(v)
+                }
+              />
+              <Tooltip
+                formatter={(value: number, name: string) => {
+                  if (name === "pnl") return [formatMoney(value), "P&L"];
+                  return [value, "Trades"];
+                }}
+              />
+              <Bar
+                yAxisId="left"
+                dataKey="count"
+                fill="#059669"
+                name="Trades"
+                radius={[4, 4, 0, 0]}
+              />
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="pnl"
+                name="P&L"
+                stroke="#7c3aed"
+                strokeWidth={2}
+                dot={{ r: 3 }}
+              />
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </section>
@@ -383,13 +425,23 @@ export default function DashboardClient() {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
       <p className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">
         {label}
       </p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+      <p
+        className={`mt-1 text-2xl font-semibold tabular-nums ${valueClassName ?? "text-zinc-900 dark:text-zinc-50"}`}
+      >
         {value}
       </p>
     </div>

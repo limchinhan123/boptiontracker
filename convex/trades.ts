@@ -210,11 +210,16 @@ export const stats = query({
   args: { dashboardSecret: v.string() },
   returns: v.object({
     totalTrades: v.number(),
-    needsReview: v.number(),
-    sheetsErrors: v.number(),
-    totalFees: v.number(),
+    totalRealizedPnl: v.number(),
     byUnderlying: v.array(
       v.object({ underlying: v.string(), count: v.number() }),
+    ),
+    byMonth: v.array(
+      v.object({
+        month: v.string(),
+        count: v.number(),
+        pnl: v.number(),
+      }),
     ),
   }),
   handler: async (ctx, args) => {
@@ -225,26 +230,42 @@ export const stats = query({
       .order("desc")
       .take(2000);
     const totalTrades = all.length;
-    const needsReview = all.filter((t) => t.needsReview).length;
-    const sheetsErrors = all.filter(
-      (t) => t.sheetsSyncError && !t.sheetsSyncedAt,
-    ).length;
-    const totalFees = all.reduce((s, t) => s + (t.fees ?? 0), 0);
-    const map = new Map<string, number>();
+    const totalRealizedPnl = all.reduce(
+      (s, t) => s + (t.realizedPnl ?? 0),
+      0,
+    );
+
+    const underlyingMap = new Map<string, number>();
+    const monthMap = new Map<string, { count: number; pnl: number }>();
     for (const t of all) {
       const u = (t.underlying ?? "UNKNOWN").toUpperCase();
-      map.set(u, (map.get(u) ?? 0) + 1);
+      underlyingMap.set(u, (underlyingMap.get(u) ?? 0) + 1);
+
+      const monthKey = new Date(t.createdAt).toISOString().slice(0, 7);
+      const cur = monthMap.get(monthKey) ?? { count: 0, pnl: 0 };
+      cur.count += 1;
+      cur.pnl += t.realizedPnl ?? 0;
+      monthMap.set(monthKey, cur);
     }
-    const byUnderlying = [...map.entries()]
+
+    const byUnderlying = [...underlyingMap.entries()]
       .map(([underlying, count]) => ({ underlying, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 12);
+
+    const byMonth = [...monthMap.entries()]
+      .map(([month, v]) => ({
+        month,
+        count: v.count,
+        pnl: v.pnl,
+      }))
+      .sort((a, b) => a.month.localeCompare(b.month));
+
     return {
       totalTrades,
-      needsReview,
-      sheetsErrors,
-      totalFees,
+      totalRealizedPnl,
       byUnderlying,
+      byMonth,
     };
   },
 });
