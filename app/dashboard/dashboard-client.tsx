@@ -139,6 +139,44 @@ export default function DashboardClient() {
     void load();
   }
 
+  async function deleteOneTrade(tradeId: string) {
+    if (!window.confirm("Delete this trade? This cannot be undone.")) return;
+    const res = await fetch("/api/dashboard/delete-trade", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ tradeId }),
+    });
+    if (!res.ok) {
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      window.alert(j.error ?? "Delete failed");
+      return;
+    }
+    void load();
+  }
+
+  async function clearAllTrades() {
+    if (
+      !window.confirm(
+        `Delete all ${trades.length} trade(s)? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    const res = await fetch("/api/dashboard/delete-trade", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ clearAll: true }),
+    });
+    if (!res.ok) {
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      window.alert(j.error ?? "Clear failed");
+      return;
+    }
+    void load();
+  }
+
   if (loading && !trades.length) {
     return (
       <div className="flex flex-1 items-center justify-center text-zinc-500">
@@ -235,6 +273,15 @@ export default function DashboardClient() {
         >
           Apply
         </button>
+        {trades.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => void clearAllTrades()}
+            className="rounded-lg border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40"
+          >
+            Clear all trades
+          </button>
+        ) : null}
       </section>
 
       {err ? (
@@ -265,6 +312,7 @@ export default function DashboardClient() {
                 key={t._id}
                 trade={t}
                 onRetrySheets={() => void retrySheets(t._id)}
+                onDelete={() => void deleteOneTrade(t._id)}
                 onUpdated={() => void load()}
               />
             ))}
@@ -296,9 +344,10 @@ function StatCard({ label, value }: { label: string; value: string }) {
 function TradeTableRow(props: {
   trade: TradeRow;
   onRetrySheets: () => void;
+  onDelete: () => void;
   onUpdated: () => void;
 }) {
-  const { trade: t, onRetrySheets, onUpdated } = props;
+  const { trade: t, onRetrySheets, onDelete, onUpdated } = props;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({
     underlying: t.underlying ?? "",
@@ -492,6 +541,13 @@ function TradeTableRow(props: {
                 Retry Sheets
               </button>
             ) : null}
+            <button
+              type="button"
+              className="text-sm text-red-600 hover:underline dark:text-red-400"
+              onClick={onDelete}
+            >
+              Delete
+            </button>
           </td>
         </>
       )}

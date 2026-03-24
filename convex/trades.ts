@@ -248,6 +248,38 @@ export const stats = query({
   },
 });
 
+export const deleteTrade = mutation({
+  args: {
+    dashboardSecret: v.string(),
+    tradeId: v.id("trades"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    assertDashboardSecret(args.dashboardSecret);
+    await ctx.db.delete(args.tradeId);
+    return null;
+  },
+});
+
+/** Deletes every row in `trades` (dashboard password required). */
+export const clearAllTrades = mutation({
+  args: { dashboardSecret: v.string() },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    assertDashboardSecret(args.dashboardSecret);
+    let deleted = 0;
+    while (true) {
+      const batch = await ctx.db.query("trades").take(200);
+      if (batch.length === 0) break;
+      for (const row of batch) {
+        await ctx.db.delete(row._id);
+        deleted += 1;
+      }
+    }
+    return deleted;
+  },
+});
+
 export const updateTrade = mutation({
   args: {
     dashboardSecret: v.string(),
