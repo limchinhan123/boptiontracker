@@ -241,7 +241,10 @@ export const stats = query({
       const u = (t.underlying ?? "UNKNOWN").toUpperCase();
       underlyingMap.set(u, (underlyingMap.get(u) ?? 0) + 1);
 
-      const monthKey = new Date(t.createdAt).toISOString().slice(0, 7);
+      const created = new Date(t.createdAt);
+      const monthKey = Number.isNaN(created.getTime())
+        ? "unknown"
+        : created.toISOString().slice(0, 7);
       const cur = monthMap.get(monthKey) ?? { count: 0, pnl: 0 };
       cur.count += 1;
       cur.pnl += t.realizedPnl ?? 0;

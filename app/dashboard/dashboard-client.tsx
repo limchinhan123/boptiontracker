@@ -1,18 +1,18 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ComposedChart,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+
+const DashboardCharts = dynamic(() => import("./dashboard-charts"), {
+  ssr: false,
+  loading: () => (
+    <section className="grid gap-6 lg:grid-cols-2">
+      <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
+      <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
+    </section>
+  ),
+});
 
 export type TradeRow = {
   _id: string;
@@ -103,31 +103,50 @@ export default function DashboardClient() {
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const params = new URLSearchParams();
-    if (underlying.trim()) params.set("underlying", underlying.trim());
-    if (needsReviewOnly) params.set("needsReview", "1");
-    const [tRes, sRes] = await Promise.all([
-      fetch(`/api/dashboard/trades?${params}`, { credentials: "include" }),
-      fetch("/api/dashboard/stats", { credentials: "include" }),
-    ]);
-    if (tRes.status === 401 || sRes.status === 401) {
-      window.location.href = "/login";
-      return { ok: false as const };
-    }
-    if (!tRes.ok || !sRes.ok) {
-      let detail = "Failed to load data";
-      try {
-        const bad = !tRes.ok ? tRes : sRes;
-        const j = (await bad.json()) as { error?: string };
-        if (j.error) detail = j.error;
-      } catch {
-        /* ignore */
+    try {
+      const params = new URLSearchParams();
+      if (underlying.trim()) params.set("underlying", underlying.trim());
+      if (needsReviewOnly) params.set("needsReview", "1");
+      const [tRes, sRes] = await Promise.all([
+        fetch(`/api/dashboard/trades?${params}`, { credentials: "include" }),
+        fetch("/api/dashboard/stats", { credentials: "include" }),
+      ]);
+      if (tRes.status === 401 || sRes.status === 401) {
+        window.location.href = "/login";
+        return { ok: false as const };
       }
-      return { ok: false as const, error: detail };
+      if (!tRes.ok || !sRes.ok) {
+        let detail = "Failed to load data";
+        try {
+          const bad = !tRes.ok ? tRes : sRes;
+          const j = (await bad.json()) as { error?: string };
+          if (j.error) detail = j.error;
+        } catch {
+          /* ignore */
+        }
+        return { ok: false as const, error: detail };
+      }
+      const tRaw: unknown = await tRes.json();
+      const sRaw: unknown = await sRes.json();
+      const trades = Array.isArray((tRaw as { trades?: unknown }).trades)
+        ? ((tRaw as { trades: TradeRow[] }).trades)
+        : [];
+      const so =
+        sRaw && typeof sRaw === "object"
+          ? (sRaw as Partial<Stats>)
+          : ({} as Partial<Stats>);
+      const stats: Stats = {
+        totalTrades: Number(so.totalTrades) || 0,
+        totalRealizedPnl: Number(so.totalRealizedPnl) || 0,
+        byUnderlying: Array.isArray(so.byUnderlying) ? so.byUnderlying : [],
+        byMonth: Array.isArray(so.byMonth) ? so.byMonth : [],
+      };
+      return { ok: true as const, trades, stats };
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Unexpected error loading dashboard";
+      return { ok: false as const, error: message };
     }
-    const tJson = (await tRes.json()) as { trades: TradeRow[] };
-    const sJson = (await sRes.json()) as Stats;
-    return { ok: true as const, trades: tJson.trades, stats: sJson };
   }, [underlying, needsReviewOnly]);
 
   useEffect(() => {
@@ -155,10 +174,14 @@ export default function DashboardClient() {
   useEffect(() => {
     const id = setInterval(() => {
       void (async () => {
-        const result = await load();
-        if (!result.ok || !("trades" in result)) return;
-        setTrades(result.trades);
-        setStats(result.stats);
+        try {
+          const result = await load();
+          if (!result.ok || !("trades" in result)) return;
+          setTrades(result.trades);
+          setStats(result.stats);
+        } catch {
+          /* ignore background refresh errors */
+        }
       })();
     }, 5000);
     return () => clearInterval(id);
@@ -174,7 +197,8 @@ export default function DashboardClient() {
 
   /** Oldest first so cumulative P&L reads naturally down the page. */
   const tableRows = useMemo(() => {
-    const sorted = [...trades].sort((a, b) => a.createdAt - b.createdAt);
+    const list = Array.isArray(trades) ? trades : [];
+    const sorted = [...list].sort((a, b) => a.createdAt - b.createdAt);
     return sorted.reduce<{ trade: TradeRow; cumulativePnl: number }[]>(
       (acc, trade) => {
         const prev = acc.at(-1)?.cumulativePnl ?? 0;
@@ -275,80 +299,10 @@ export default function DashboardClient() {
         </section>
       ) : null}
 
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div className="h-64 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Trades by underlying
-          </h2>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={stats?.byUnderlying ?? []}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-700" />
-              <XAxis dataKey="underlying" tick={{ fontSize: 11 }} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Bar dataKey="count" fill="#059669" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="h-64 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Breakdown by month
-          </h2>
-          <p className="mb-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-            Bars: trade count · Line: sum of P&amp;L (realized) in that month
-          </p>
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={monthChartData}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-700" />
-              <XAxis dataKey="monthLabel" tick={{ fontSize: 10 }} />
-              <YAxis
-                yAxisId="left"
-                allowDecimals={false}
-                tick={{ fontSize: 10 }}
-                width={32}
-              />
-              <YAxis
-                yAxisId="right"
-                orientation="right"
-                tick={{ fontSize: 10 }}
-                width={40}
-                tickFormatter={(v) =>
-                  new Intl.NumberFormat(undefined, {
-                    notation: "compact",
-                    maximumFractionDigits: 1,
-                  }).format(v)
-                }
-              />
-              <Tooltip
-                formatter={(value, name) => {
-                  if (value == null) return ["—", String(name)];
-                  const n =
-                    typeof value === "number" ? value : Number(value);
-                  if (Number.isNaN(n)) return [String(value), String(name)];
-                  if (name === "pnl") return [formatMoney(n), "P&L"];
-                  return [String(n), "Trades"];
-                }}
-              />
-              <Bar
-                yAxisId="left"
-                dataKey="count"
-                fill="#059669"
-                name="Trades"
-                radius={[4, 4, 0, 0]}
-              />
-              <Line
-                yAxisId="right"
-                type="monotone"
-                dataKey="pnl"
-                name="P&L"
-                stroke="#7c3aed"
-                strokeWidth={2}
-                dot={{ r: 3 }}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
+      <DashboardCharts
+        byUnderlying={stats?.byUnderlying ?? []}
+        monthChartData={monthChartData}
+      />
 
       <section className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
         <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">

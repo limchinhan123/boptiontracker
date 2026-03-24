@@ -20,6 +20,9 @@ export function verifySessionCookie(value: string | undefined): boolean {
   if (!value) {
     return false;
   }
+  if (!process.env.DASHBOARD_SECRET) {
+    return false;
+  }
   const expected = deriveSessionToken();
   try {
     const a = Buffer.from(value);
