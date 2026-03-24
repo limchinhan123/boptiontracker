@@ -9,7 +9,6 @@
  */
 
 import type * as ingest from "../ingest.js";
-import type * as sheets from "../sheets.js";
 import type * as trades from "../trades.js";
 
 import type {
@@ -20,7 +19,6 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   ingest: typeof ingest;
-  sheets: typeof sheets;
   trades: typeof trades;
 }>;
 

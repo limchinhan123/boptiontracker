@@ -39,6 +39,7 @@ const EXTRACT_SCHEMA = {
             notes: { type: "string" },
             confidence: { type: "number" },
             needsReview: { type: "boolean" },
+            realizedPnl: { type: "number" },
           },
           required: [
             "underlying",
@@ -56,6 +57,7 @@ const EXTRACT_SCHEMA = {
             "notes",
             "confidence",
             "needsReview",
+            "realizedPnl",
           ],
         },
       },
@@ -67,7 +69,12 @@ const EXTRACT_SCHEMA = {
 const SYSTEM_PROMPT = `You extract structured option trade data from Interactive Brokers (IBKR) mobile or desktop screenshots.
 Use null or empty string only where the schema requires a value — prefer numbers for numeric fields; use 0 if unknown for numbers and "USD" as default currency if unclear.
 Set needsReview true if any critical field is missing or ambiguous. expiration should be YYYY-MM-DD when possible.
-side should describe buy/sell and open/close if visible (e.g. "SELL TO OPEN").`;
+side should describe buy/sell and open/close if visible (e.g. "SELL TO OPEN").
+
+Field mapping (do not confuse these):
+- total: the execution cash amount labeled **Net Amount** (or similar: net debit/credit for this fill), not market value of the option.
+- fees: commission and fees total if shown (else 0).
+- realizedPnl: ONLY the value labeled **Realized PNL**, **Realized P&L**, or **R P&L** on the trade/execution details screen. Copy the signed number as shown (e.g. 172.804035). If that label is not visible anywhere on the screenshot, use 0. Never put Net Amount or premium into realizedPnl.`;
 
 function assertIngestSecret(secret: string) {
   const expected = process.env.INGEST_SECRET;
@@ -134,7 +141,7 @@ export const processTelegramScreenshot = action({
             content: [
               {
                 type: "text",
-                text: "Extract all distinct option orders/trades visible in this screenshot.",
+                text: "Extract all distinct option orders/trades visible in this screenshot. Include Realized PNL when IBKR shows it on this screen.",
               },
               {
                 type: "image_url",
@@ -178,9 +185,6 @@ export const processTelegramScreenshot = action({
             modelOutput: raw,
           },
         );
-        await ctx.scheduler.runAfter(0, internal.sheets.syncTradeToSheets, {
-          tradeId: id,
-        });
         return { status: "ok" as const, tradeIds: [id] };
       }
 
@@ -215,12 +219,14 @@ export const processTelegramScreenshot = action({
           confidence:
             typeof t.confidence === "number" ? t.confidence : undefined,
           needsReview: Boolean(t.needsReview),
+          realizedPnl:
+            typeof t.realizedPnl === "number" &&
+            Number.isFinite(t.realizedPnl)
+              ? t.realizedPnl
+              : undefined,
           modelOutput: raw,
         });
         tradeIds.push(id);
-        await ctx.scheduler.runAfter(0, internal.sheets.syncTradeToSheets, {
-          tradeId: id,
-        });
       }
 
       return { status: "ok" as const, tradeIds };
@@ -234,9 +240,6 @@ export const processTelegramScreenshot = action({
         imageStorageId: storageId,
         needsReview: true,
         ingestError: msg,
-      });
-      await ctx.scheduler.runAfter(0, internal.sheets.syncTradeToSheets, {
-        tradeId: id,
       });
       return { status: "error" as const, tradeIds: [id], message: msg };
     }

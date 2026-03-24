@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Options trade dashboard",
-  description: "IBKR screenshot → LLM → Convex → Google Sheets",
+  description: "IBKR screenshot → LLM → Convex → dashboard & Excel export",
 };
 
 export default function RootLayout({

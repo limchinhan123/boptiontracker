@@ -37,8 +37,6 @@ export type TradeRow = {
   confidence?: number;
   needsReview: boolean;
   ingestError?: string;
-  sheetsSyncedAt?: number;
-  sheetsSyncError?: string;
   realizedPnl?: number;
 };
 
@@ -208,16 +206,6 @@ export default function DashboardClient() {
     );
   }, [trades]);
 
-  async function retrySheets(tradeId: string) {
-    await fetch("/api/dashboard/retry-sheets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ tradeId }),
-    });
-    void load();
-  }
-
   async function deleteOneTrade(tradeId: string) {
     if (!window.confirm("Delete this trade? This cannot be undone.")) return;
     const res = await fetch("/api/dashboard/delete-trade", {
@@ -256,6 +244,16 @@ export default function DashboardClient() {
     void load();
   }
 
+  function downloadExcel() {
+    const params = new URLSearchParams();
+    if (underlying.trim()) params.set("underlying", underlying.trim());
+    if (needsReviewOnly) params.set("needsReview", "1");
+    const q = params.toString();
+    window.location.assign(
+      `/api/dashboard/export-excel${q ? `?${q}` : ""}`,
+    );
+  }
+
   if (loading && !trades.length) {
     return (
       <div className="flex flex-1 items-center justify-center text-zinc-500">
@@ -276,8 +274,11 @@ export default function DashboardClient() {
             <span className="font-medium text-zinc-600 dark:text-zinc-300">
               P&amp;L
             </span>{" "}
-            per row in Edit for a running cumulative total. Data from Convex;
-            Google Sheets when configured.
+            per row in Edit for a running cumulative total. Use{" "}
+            <span className="font-medium text-zinc-600 dark:text-zinc-300">
+              Download Excel
+            </span>{" "}
+            to export (respects filters; up to 500 rows).
           </p>
         </div>
         <Link
@@ -329,6 +330,13 @@ export default function DashboardClient() {
         >
           Apply
         </button>
+        <button
+          type="button"
+          onClick={() => downloadExcel()}
+          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800/60"
+        >
+          Download Excel
+        </button>
         {trades.length > 0 ? (
           <button
             type="button"
@@ -356,7 +364,6 @@ export default function DashboardClient() {
               <th className="px-3 py-2.5 text-right">Net amount</th>
               <th className="px-3 py-2.5 text-right">P&amp;L</th>
               <th className="px-3 py-2.5 text-right">Cumulative P&amp;L</th>
-              <th className="px-3 py-2.5">Sheets</th>
               <th className="px-3 py-2.5">Actions</th>
             </tr>
           </thead>
@@ -366,7 +373,6 @@ export default function DashboardClient() {
                 key={t._id}
                 trade={t}
                 cumulativePnl={cumulativePnl}
-                onRetrySheets={() => void retrySheets(t._id)}
                 onDelete={() => void deleteOneTrade(t._id)}
                 onUpdated={() => void load()}
               />
@@ -428,11 +434,10 @@ function tradeDraftFromTrade(t: TradeRow) {
 function TradeTableRow(props: {
   trade: TradeRow;
   cumulativePnl: number;
-  onRetrySheets: () => void;
   onDelete: () => void;
   onUpdated: () => void;
 }) {
-  const { trade: t, cumulativePnl, onRetrySheets, onDelete, onUpdated } = props;
+  const { trade: t, cumulativePnl, onDelete, onUpdated } = props;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(() => tradeDraftFromTrade(t));
 
@@ -461,18 +466,11 @@ function TradeTableRow(props: {
     onUpdated();
   }
 
-  const sheetsOk = Boolean(t.sheetsSyncedAt);
-  const sheetsLabel = sheetsOk
-    ? "Synced"
-    : t.sheetsSyncError
-      ? "Error"
-      : "Pending";
-
   const net = computeNetAmount(t);
   const pnl = t.realizedPnl;
   const dateEntered = new Date(t.createdAt);
 
-  const COLS = 10;
+  const COLS = 9;
 
   if (editing) {
     return (
@@ -662,27 +660,6 @@ function TradeTableRow(props: {
         >
           {formatMoney(cumulativePnl)}
         </td>
-        <td className="px-3 py-2.5 text-xs">
-          <span
-            className={
-              sheetsOk
-                ? "text-emerald-700 dark:text-emerald-400"
-                : t.sheetsSyncError
-                  ? "text-red-600 dark:text-red-400"
-                  : "text-zinc-500"
-            }
-          >
-            {sheetsLabel}
-          </span>
-          {t.sheetsSyncError ? (
-            <span
-              className="mt-0.5 block max-w-[120px] truncate text-[10px] text-red-500"
-              title={t.sheetsSyncError}
-            >
-              {t.sheetsSyncError}
-            </span>
-          ) : null}
-        </td>
         <td className="space-x-2 px-3 py-2.5 whitespace-nowrap">
           <button
             type="button"
@@ -694,15 +671,6 @@ function TradeTableRow(props: {
           >
             Edit
           </button>
-          {!sheetsOk ? (
-            <button
-              type="button"
-              className="text-sm text-zinc-600 underline dark:text-zinc-400"
-              onClick={onRetrySheets}
-            >
-              Retry Sheets
-            </button>
-          ) : null}
           <button
             type="button"
             className="text-sm text-red-600 hover:underline dark:text-red-400"

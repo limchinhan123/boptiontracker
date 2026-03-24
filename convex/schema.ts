@@ -32,6 +32,7 @@ export default defineSchema({
     modelOutput: v.optional(v.string()),
     ingestError: v.optional(v.string()),
 
+    /** Legacy (Google Sheets export removed); kept so existing rows stay valid. */
     sheetsSyncedAt: v.optional(v.number()),
     sheetsSyncError: v.optional(v.string()),
 

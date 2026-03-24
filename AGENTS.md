@@ -15,11 +15,16 @@ Convex agent skills for common tasks can be installed by running `npx convex ai-
 ## Learned User Preferences
 
 - Prefer numbered, step-by-step setup and CLI guidance over terse or assumption-heavy instructions; the user gets unstuck faster with explicit “do this next” ordering.
+- Do not paste API tokens, bot tokens, or other secrets into chat; use Terminal or provider UIs only and rotate credentials if they were exposed.
 
 ## Learned Workspace Facts
 
 - The project directory name includes a space: `Cursor project` under `Documents`. Shell commands must quote the path (e.g. `cd "/Users/brandonlim/Documents/Cursor project"`) or escape the space.
-- `DASHBOARD_SECRET` and `INGEST_SECRET` are set in the Convex dashboard **and** duplicated in `.env.local` for Next.js; Convex does not push those values into the local app automatically.
+- `DASHBOARD_SECRET` and `INGEST_SECRET` are set in the Convex dashboard **and** duplicated in `.env.local` for Next.js; Convex does not push those values into the local app automatically. The Convex deployment selected in the dashboard must match `NEXT_PUBLIC_CONVEX_URL`, or dashboard queries return Unauthorized.
 - `.env.local` is a dotfile; macOS Open dialogs often hide it until hidden files are shown (e.g. Command–Shift–period). Double‑clicking it in Finder may show “no application” — open it from the editor (Quick Open / Open With) instead.
 - For this app, `OPENAI_API_KEY` is set in the Convex dashboard only, not in `.env.local`.
-- Web dashboard login uses the same string as `DASHBOARD_SECRET` (not a separate password).
+- Web dashboard login uses the same string as `DASHBOARD_SECRET` (not a separate password). Vercel production uses project env vars, not `.env.local`; redeploy after changing them.
+- Production deployment for this app: `https://boptiontracker.vercel.app` (Vercel project `boptiontracker`).
+- Helper scripts from the repo root: `npm run telegram:set-webhook` (reads `.env.local`, needs `PUBLIC_APP_URL`); `npm run vercel:push-env` (needs `VERCEL_TOKEN`, `VERCEL_PROJECT_NAME`, optional `VERCEL_TEAM_ID`); `npm run convex:sync-secrets` / `convex:sync-secrets:prod` (copies `DASHBOARD_SECRET` and `INGEST_SECRET` from `.env.local` to the Convex deployment the CLI targets).
+- Git `push` to GitHub over HTTPS requires a personal access token (or `gh auth login`), not the GitHub account password; Homebrew/`gh` is optional if using a token.
+- Recharts `Tooltip` formatters in the dashboard should treat tooltip values as possibly undefined so `next build` (and Vercel) typecheck passes.

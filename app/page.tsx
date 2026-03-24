@@ -9,8 +9,8 @@ export default function Home() {
         </h1>
         <p className="mt-3 text-zinc-600 dark:text-zinc-400">
           Send Interactive Brokers screenshots to your Telegram bot. Trades are
-          extracted with OpenAI, stored in Convex, appended to Google Sheets, and
-          shown on the dashboard.
+          extracted with OpenAI, stored in Convex, and shown on the dashboard
+          (with optional Excel download).
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link

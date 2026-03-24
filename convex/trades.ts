@@ -96,6 +96,7 @@ export const insertTradeLeg = internalMutation({
     notes: v.optional(v.string()),
     confidence: v.optional(v.number()),
     needsReview: v.boolean(),
+    realizedPnl: v.optional(v.number()),
     modelOutput: v.optional(v.string()),
     ingestError: v.optional(v.string()),
   },
@@ -122,44 +123,10 @@ export const insertTradeLeg = internalMutation({
       notes: args.notes,
       confidence: args.confidence,
       needsReview: args.needsReview,
+      realizedPnl: args.realizedPnl,
       modelOutput: args.modelOutput,
       ingestError: args.ingestError,
     });
-  },
-});
-
-export const setSheetsSyncResult = internalMutation({
-  args: {
-    tradeId: v.id("trades"),
-    ok: v.boolean(),
-    error: v.optional(v.string()),
-    syncedAt: v.optional(v.number()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    if (args.ok) {
-      await ctx.db.patch(args.tradeId, {
-        sheetsSyncedAt: args.syncedAt,
-        sheetsSyncError: undefined,
-      });
-    } else {
-      await ctx.db.patch(args.tradeId, {
-        sheetsSyncError: args.error,
-      });
-    }
-    return null;
-  },
-});
-
-export const clearSheetsSyncForRetry = internalMutation({
-  args: { tradeId: v.id("trades") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.tradeId, {
-      sheetsSyncedAt: undefined,
-      sheetsSyncError: undefined,
-    });
-    return null;
   },
 });
 
