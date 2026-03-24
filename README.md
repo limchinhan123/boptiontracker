@@ -117,6 +117,7 @@ Webhook path: `POST /api/telegram/webhook`.
 ```
 app/                 # Next.js App Router (pages, dashboard, API routes)
 convex/              # Convex schema, trades, ingest, internal helpers
+docs/                # Runbooks and checklists (e.g. close-out)
 lib/                 # Session cookie helpers, Convex HTTP client
 scripts/             # Webhook + env sync utilities
 ```
@@ -126,6 +127,10 @@ scripts/             # Webhook + env sync utilities
 - Do not commit `.env.local` or API keys.
 - Treat `DASHBOARD_SECRET` as the dashboard password; use a long random value.
 - Rotate credentials if they are ever exposed in chat or logs.
+
+## Maintenance & close-out
+
+Before a milestone or handoff, run through **[docs/CLOSEOUT.md](docs/CLOSEOUT.md)** (lint, build, Convex `tsc`, production env checks, optional git tag). Closing out does **not** stop you from committing new work later—`main` keeps evolving.
 
 ## License
 

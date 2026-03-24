@@ -304,11 +304,16 @@ export default function DashboardClient() {
       const c = compareTradesByKey(a, b, sortKey);
       return sortDir === "asc" ? c : -c;
     });
-    let cum = 0;
-    return sorted.map((trade) => {
-      cum += trade.realizedPnl ?? 0;
-      return { trade, cumulativePnl: cum };
-    });
+    return sorted.reduce<{ trade: TradeRow; cumulativePnl: number }[]>(
+      (acc, trade) => {
+        const prev = acc.at(-1)?.cumulativePnl ?? 0;
+        return [
+          ...acc,
+          { trade, cumulativePnl: prev + (trade.realizedPnl ?? 0) },
+        ];
+      },
+      [],
+    );
   }, [trades, sortKey, sortDir]);
 
   const monthPnlRows = useMemo(() => {

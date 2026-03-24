@@ -17,6 +17,7 @@ Convex agent skills for common tasks can be installed by running `npx convex ai-
 - Prefer numbered, step-by-step setup and CLI guidance over terse or assumption-heavy instructions; the user gets unstuck faster with explicit “do this next” ordering.
 - Do not paste API tokens, bot tokens, or other secrets into chat; use Terminal or provider UIs only and rotate credentials if they were exposed.
 - **Deploy / push:** Before `git push` or `npx convex deploy` (prod), give a short summary of user-visible changes (UI, routes, env expectations). Do not push or deploy on the user’s behalf until they confirm—**unless** they explicitly ask to deploy in that message (e.g. “deploy it”, “push to prod”). When they explicitly deploy, a brief recap before running commands is still fine.
+- **Milestone / handoff:** Use `docs/CLOSEOUT.md` for lint, build, Convex `tsc`, prod env verification, and optional git tags; README links to it under “Maintenance & close-out”.
 
 ## Learned Workspace Facts
 
