@@ -3,6 +3,11 @@ import { api, getConvexClient } from "@/lib/convex-server";
 
 export const runtime = "nodejs";
 
+/** Telegram and uptime checks may GET the URL; POST-only used to 405 on some setups. */
+export async function GET() {
+  return new NextResponse("telegram webhook ok", { status: 200 });
+}
+
 function extToMime(ext: string): string {
   const e = ext.toLowerCase();
   if (e === "png") return "image/png";
