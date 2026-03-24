@@ -69,7 +69,15 @@ export default function DashboardClient() {
       return { ok: false as const };
     }
     if (!tRes.ok || !sRes.ok) {
-      return { ok: false as const, error: "Failed to load data" as const };
+      let detail = "Failed to load data";
+      try {
+        const bad = !tRes.ok ? tRes : sRes;
+        const j = (await bad.json()) as { error?: string };
+        if (j.error) detail = j.error;
+      } catch {
+        /* ignore */
+      }
+      return { ok: false as const, error: detail };
     }
     const tJson = (await tRes.json()) as { trades: TradeRow[] };
     const sJson = (await sRes.json()) as Stats;

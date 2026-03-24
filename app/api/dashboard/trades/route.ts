@@ -17,13 +17,19 @@ export async function GET(request: Request) {
     ? Number(searchParams.get("limit"))
     : undefined;
 
-  const client = getConvexClient();
-  const secret = requireDashboardSecret();
-  const trades = await client.query(api.trades.list, {
-    dashboardSecret: secret,
-    underlyingPrefix: underlyingPrefix || undefined,
-    needsReviewOnly: needsReviewOnly || undefined,
-    limit,
-  });
-  return NextResponse.json({ trades });
+  try {
+    const client = getConvexClient();
+    const secret = requireDashboardSecret();
+    const trades = await client.query(api.trades.list, {
+      dashboardSecret: secret,
+      underlyingPrefix: underlyingPrefix || undefined,
+      needsReviewOnly: needsReviewOnly || undefined,
+      limit,
+    });
+    return NextResponse.json({ trades });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Convex request failed";
+    console.error("[dashboard/trades]", message, e);
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
 }
