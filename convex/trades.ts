@@ -37,6 +37,7 @@ const tradeDoc = v.object({
   ingestError: v.optional(v.string()),
   sheetsSyncedAt: v.optional(v.number()),
   sheetsSyncError: v.optional(v.string()),
+  realizedPnl: v.optional(v.number()),
 });
 
 function assertDashboardSecret(secret: string) {
@@ -301,6 +302,7 @@ export const updateTrade = mutation({
       strategyTag: v.optional(v.string()),
       notes: v.optional(v.string()),
       needsReview: v.optional(v.boolean()),
+      realizedPnl: v.optional(v.number()),
     }),
   },
   returns: v.null(),

@@ -34,6 +34,9 @@ export default defineSchema({
 
     sheetsSyncedAt: v.optional(v.number()),
     sheetsSyncError: v.optional(v.string()),
+
+    /** Realized P&L for this leg (optional; you can set via Edit on the dashboard). */
+    realizedPnl: v.optional(v.number()),
   })
     .index("by_source_message", ["source", "messageId"])
     .index("by_message_leg", ["source", "messageId", "legIndex"])

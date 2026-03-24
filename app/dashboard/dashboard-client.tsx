@@ -25,6 +25,7 @@ export type TradeRow = {
   optionType?: "call" | "put" | "unknown";
   strike?: number;
   expiration?: string;
+  multiplier?: number;
   side?: string;
   quantity?: number;
   price?: number;
@@ -38,7 +39,46 @@ export type TradeRow = {
   ingestError?: string;
   sheetsSyncedAt?: number;
   sheetsSyncError?: string;
+  realizedPnl?: number;
 };
+
+function formatMoney(
+  n: number | null | undefined,
+  currency = "USD",
+): string {
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
+function formatOptionType(t?: TradeRow["optionType"]): string {
+  if (t === "call") return "Call";
+  if (t === "put") return "Put";
+  if (t === "unknown") return "Unknown";
+  return "—";
+}
+
+/** Premium/cash proxy: contract total if present, else qty × price × multiplier, minus fees. */
+function computeNetAmount(t: TradeRow): number | null {
+  const q = t.quantity ?? 0;
+  const p = t.price ?? 0;
+  const mult = t.multiplier ?? 100;
+  const premium = t.total != null ? t.total : q * p * mult;
+  const fees = t.fees ?? 0;
+  if (t.total == null && q === 0 && p === 0) return null;
+  return premium - fees;
+}
+
+function pnlClass(n: number): string {
+  if (n > 0)
+    return "text-emerald-700 tabular-nums dark:text-emerald-400";
+  if (n < 0)
+    return "text-red-600 tabular-nums dark:text-red-400";
+  return "tabular-nums text-zinc-700 dark:text-zinc-300";
+}
 
 type Stats = {
   totalTrades: number;
@@ -129,6 +169,18 @@ export default function DashboardClient() {
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [trades]);
 
+  /** Oldest first so cumulative P&L reads naturally down the page. */
+  const tableRows = useMemo(() => {
+    const sorted = [...trades].sort((a, b) => a.createdAt - b.createdAt);
+    return sorted.reduce<{ trade: TradeRow; cumulativePnl: number }[]>(
+      (acc, trade) => {
+        const prev = acc.at(-1)?.cumulativePnl ?? 0;
+        return [...acc, { trade, cumulativePnl: prev + (trade.realizedPnl ?? 0) }];
+      },
+      [],
+    );
+  }, [trades]);
+
   async function retrySheets(tradeId: string) {
     await fetch("/api/dashboard/retry-sheets", {
       method: "POST",
@@ -193,7 +245,11 @@ export default function DashboardClient() {
             Options trades
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Live view (refreshes every 5s). Data from Convex; rows sync to
+            Live view (refreshes every 5s). Trades are oldest → newest; set{" "}
+            <span className="font-medium text-zinc-600 dark:text-zinc-300">
+              P&amp;L
+            </span>{" "}
+            per row in Edit for a running cumulative total. Data from Convex;
             Google Sheets when configured.
           </p>
         </div>
@@ -289,28 +345,27 @@ export default function DashboardClient() {
       ) : null}
 
       <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <table className="w-full min-w-[960px] text-left text-sm">
-          <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
+        <table className="w-full min-w-[72rem] text-left text-sm">
+          <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
             <tr>
-              <th className="px-3 py-2">When</th>
-              <th className="px-3 py-2">Underlying</th>
-              <th className="px-3 py-2">Type</th>
-              <th className="px-3 py-2">Strike</th>
-              <th className="px-3 py-2">Exp</th>
-              <th className="px-3 py-2">Side</th>
-              <th className="px-3 py-2">Qty</th>
-              <th className="px-3 py-2">Price</th>
-              <th className="px-3 py-2">Fees</th>
-              <th className="px-3 py-2">Review</th>
-              <th className="px-3 py-2">Sheets</th>
-              <th className="px-3 py-2">Actions</th>
+              <th className="px-3 py-2.5">Underlying</th>
+              <th className="px-3 py-2.5">Action</th>
+              <th className="px-3 py-2.5">Type</th>
+              <th className="px-3 py-2.5 text-right">Price</th>
+              <th className="px-3 py-2.5">Date entered</th>
+              <th className="px-3 py-2.5 text-right">Net amount</th>
+              <th className="px-3 py-2.5 text-right">P&amp;L</th>
+              <th className="px-3 py-2.5 text-right">Cumulative P&amp;L</th>
+              <th className="px-3 py-2.5">Sheets</th>
+              <th className="px-3 py-2.5">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {trades.map((t) => (
+            {tableRows.map(({ trade: t, cumulativePnl }) => (
               <TradeTableRow
                 key={t._id}
                 trade={t}
+                cumulativePnl={cumulativePnl}
                 onRetrySheets={() => void retrySheets(t._id)}
                 onDelete={() => void deleteOneTrade(t._id)}
                 onUpdated={() => void load()}
@@ -341,23 +396,35 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function TradeTableRow(props: {
-  trade: TradeRow;
-  onRetrySheets: () => void;
-  onDelete: () => void;
-  onUpdated: () => void;
-}) {
-  const { trade: t, onRetrySheets, onDelete, onUpdated } = props;
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState({
+function tradeDraftFromTrade(t: TradeRow) {
+  return {
     underlying: t.underlying ?? "",
+    side: t.side ?? "",
+    price:
+      t.price === undefined || t.price === null ? "" : String(t.price),
+    realizedPnl:
+      t.realizedPnl === undefined || t.realizedPnl === null
+        ? ""
+        : String(t.realizedPnl),
     strike: t.strike === undefined || t.strike === null ? "" : String(t.strike),
     quantity:
       t.quantity === undefined || t.quantity === null ? "" : String(t.quantity),
     fees: t.fees === undefined || t.fees === null ? "" : String(t.fees),
     notes: t.notes ?? "",
     needsReview: t.needsReview,
-  });
+  };
+}
+
+function TradeTableRow(props: {
+  trade: TradeRow;
+  cumulativePnl: number;
+  onRetrySheets: () => void;
+  onDelete: () => void;
+  onUpdated: () => void;
+}) {
+  const { trade: t, cumulativePnl, onRetrySheets, onDelete, onUpdated } = props;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(() => tradeDraftFromTrade(t));
 
   async function save() {
     await fetch("/api/dashboard/update-trade", {
@@ -368,10 +435,12 @@ function TradeTableRow(props: {
         tradeId: t._id,
         patch: {
           underlying: draft.underlying || undefined,
-          strike:
-            draft.strike === "" ? undefined : Number(draft.strike),
-          quantity:
-            draft.quantity === "" ? undefined : Number(draft.quantity),
+          side: draft.side || undefined,
+          price: draft.price === "" ? undefined : Number(draft.price),
+          realizedPnl:
+            draft.realizedPnl === "" ? undefined : Number(draft.realizedPnl),
+          strike: draft.strike === "" ? undefined : Number(draft.strike),
+          quantity: draft.quantity === "" ? undefined : Number(draft.quantity),
           fees: draft.fees === "" ? undefined : Number(draft.fees),
           notes: draft.notes || undefined,
           needsReview: draft.needsReview,
@@ -389,187 +458,131 @@ function TradeTableRow(props: {
       ? "Error"
       : "Pending";
 
-  const row = (
-    <tr className="border-b border-zinc-100 dark:border-zinc-800">
-      <td className="whitespace-nowrap px-3 py-2 text-zinc-600 dark:text-zinc-400">
-        {new Date(t.createdAt).toLocaleString()}
-      </td>
-      {editing ? (
-        <>
-          <td className="px-3 py-2">
-            <input
-              className="w-20 rounded border border-zinc-300 px-1 dark:border-zinc-600"
-              value={draft.underlying}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, underlying: e.target.value }))
-              }
-            />
-          </td>
-          <td className="px-3 py-2 text-zinc-500">{t.optionType}</td>
-          <td className="px-3 py-2">
-            <input
-              className="w-16 rounded border border-zinc-300 px-1 dark:border-zinc-600"
-              value={draft.strike}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, strike: e.target.value }))
-              }
-            />
-          </td>
-          <td className="px-3 py-2 text-zinc-500">{t.expiration}</td>
-          <td className="px-3 py-2 text-zinc-500">{t.side}</td>
-          <td className="px-3 py-2">
-            <input
-              className="w-12 rounded border border-zinc-300 px-1 dark:border-zinc-600"
-              value={draft.quantity}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, quantity: e.target.value }))
-              }
-            />
-          </td>
-          <td className="px-3 py-2 text-zinc-500">{t.price}</td>
-          <td className="px-3 py-2">
-            <input
-              className="w-14 rounded border border-zinc-300 px-1 dark:border-zinc-600"
-              value={draft.fees}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, fees: e.target.value }))
-              }
-            />
-          </td>
-          <td className="px-3 py-2">
-            <input
-              type="checkbox"
-              checked={draft.needsReview}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, needsReview: e.target.checked }))
-              }
-            />
-          </td>
-          <td className="px-3 py-2 text-xs text-zinc-500">{sheetsLabel}</td>
-          <td className="space-x-2 px-3 py-2">
-            <button
-              type="button"
-              className="text-emerald-700 dark:text-emerald-400"
-              onClick={() => void save()}
-            >
-              Save
-            </button>
-            <button
-              type="button"
-              className="text-zinc-500"
-              onClick={() => setEditing(false)}
-            >
-              Cancel
-            </button>
-          </td>
-        </>
-      ) : (
-        <>
-          <td className="px-3 py-2 font-medium text-zinc-900 dark:text-zinc-50">
-            {t.underlying ?? "—"}
-          </td>
-          <td className="px-3 py-2">{t.optionType ?? "—"}</td>
-          <td className="px-3 py-2">{t.strike ?? "—"}</td>
-          <td className="px-3 py-2 whitespace-nowrap">{t.expiration ?? "—"}</td>
-          <td className="px-3 py-2 text-xs">{t.side ?? "—"}</td>
-          <td className="px-3 py-2">{t.quantity ?? "—"}</td>
-          <td className="px-3 py-2">{t.price ?? "—"}</td>
-          <td className="px-3 py-2">{t.fees ?? "—"}</td>
-          <td className="px-3 py-2">
-            {t.needsReview ? (
-              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                Yes
-              </span>
-            ) : (
-              <span className="text-zinc-400">No</span>
-            )}
-          </td>
-          <td className="px-3 py-2 text-xs">
-            <span
-              className={
-                sheetsOk
-                  ? "text-emerald-700 dark:text-emerald-400"
-                  : t.sheetsSyncError
-                    ? "text-red-600 dark:text-red-400"
-                    : "text-zinc-500"
-              }
-            >
-              {sheetsLabel}
-            </span>
-            {t.sheetsSyncError ? (
-              <span
-                className="mt-0.5 block max-w-[140px] truncate text-[10px] text-red-500"
-                title={t.sheetsSyncError}
-              >
-                {t.sheetsSyncError}
-              </span>
-            ) : null}
-          </td>
-          <td className="space-x-2 px-3 py-2 whitespace-nowrap">
-            <button
-              type="button"
-              className="text-sm text-emerald-700 dark:text-emerald-400"
-              onClick={() => {
-                setDraft({
-                  underlying: t.underlying ?? "",
-                  strike:
-                    t.strike === undefined || t.strike === null
-                      ? ""
-                      : String(t.strike),
-                  quantity:
-                    t.quantity === undefined || t.quantity === null
-                      ? ""
-                      : String(t.quantity),
-                  fees:
-                    t.fees === undefined || t.fees === null
-                      ? ""
-                      : String(t.fees),
-                  notes: t.notes ?? "",
-                  needsReview: t.needsReview,
-                });
-                setEditing(true);
-              }}
-            >
-              Edit
-            </button>
-            {!sheetsOk ? (
-              <button
-                type="button"
-                className="text-sm text-zinc-600 underline dark:text-zinc-400"
-                onClick={onRetrySheets}
-              >
-                Retry Sheets
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="text-sm text-red-600 hover:underline dark:text-red-400"
-              onClick={onDelete}
-            >
-              Delete
-            </button>
-          </td>
-        </>
-      )}
-    </tr>
-  );
+  const net = computeNetAmount(t);
+  const pnl = t.realizedPnl;
+  const dateEntered = new Date(t.createdAt);
+
+  const COLS = 10;
 
   if (editing) {
     return (
       <>
-        {row}
-        <tr className="border-b border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">
-          <td colSpan={12} className="px-3 py-2">
-            <label className="block text-xs font-medium text-zinc-500">
+        <tr className="border-b border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/80">
+          <td colSpan={COLS} className="px-3 py-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="text-xs font-medium text-zinc-500">
+                Underlying
+                <input
+                  className="mt-0.5 block w-24 rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  value={draft.underlying}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, underlying: e.target.value }))
+                  }
+                />
+              </label>
+              <label className="text-xs font-medium text-zinc-500">
+                Action
+                <input
+                  className="mt-0.5 block w-40 rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  value={draft.side}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, side: e.target.value }))
+                  }
+                  placeholder="e.g. SELL TO OPEN"
+                />
+              </label>
+              <label className="text-xs font-medium text-zinc-500">
+                Price
+                <input
+                  className="mt-0.5 block w-24 rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  value={draft.price}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, price: e.target.value }))
+                  }
+                />
+              </label>
+              <label className="text-xs font-medium text-zinc-500">
+                P&amp;L
+                <input
+                  className="mt-0.5 block w-28 rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  value={draft.realizedPnl}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, realizedPnl: e.target.value }))
+                  }
+                  placeholder="Realized"
+                />
+              </label>
+              <label className="text-xs font-medium text-zinc-500">
+                Strike
+                <input
+                  className="mt-0.5 block w-20 rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  value={draft.strike}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, strike: e.target.value }))
+                  }
+                />
+              </label>
+              <label className="text-xs font-medium text-zinc-500">
+                Qty
+                <input
+                  className="mt-0.5 block w-16 rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  value={draft.quantity}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, quantity: e.target.value }))
+                  }
+                />
+              </label>
+              <label className="text-xs font-medium text-zinc-500">
+                Fees
+                <input
+                  className="mt-0.5 block w-24 rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  value={draft.fees}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, fees: e.target.value }))
+                  }
+                />
+              </label>
+              <label className="flex items-center gap-2 pt-4 text-xs text-zinc-600 dark:text-zinc-400">
+                <input
+                  type="checkbox"
+                  checked={draft.needsReview}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, needsReview: e.target.checked }))
+                  }
+                />
+                Needs review
+              </label>
+            </div>
+            <label className="mt-3 block text-xs font-medium text-zinc-500">
               Notes
               <input
-                className="mt-1 w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600"
+                className="mt-1 w-full max-w-2xl rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
                 value={draft.notes}
                 onChange={(e) =>
                   setDraft((d) => ({ ...d, notes: e.target.value }))
                 }
               />
             </label>
+            <p className="mt-1 text-[11px] text-zinc-500">
+              Type: {formatOptionType(t.optionType)} · Exp {t.expiration ?? "—"}{" "}
+              · Date entered {dateEntered.toLocaleString()}
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm text-white dark:bg-emerald-600"
+                onClick={() => void save()}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-600"
+                onClick={() => setEditing(false)}
+              >
+                Cancel
+              </button>
+            </div>
             {t.ingestError ? (
               <p className="mt-2 text-xs text-red-600 dark:text-red-400">
                 Ingest: {t.ingestError}
@@ -583,11 +596,116 @@ function TradeTableRow(props: {
 
   return (
     <>
-      {row}
-      {t.ingestError && !editing ? (
+      <tr className="border-b border-zinc-100 dark:border-zinc-800">
+        <td className="px-3 py-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+              {t.underlying ?? "—"}
+            </span>
+            {t.needsReview ? (
+              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                Review
+              </span>
+            ) : null}
+          </div>
+          {t.strike != null || t.expiration ? (
+            <p className="mt-0.5 text-[11px] text-zinc-500">
+              {t.strike != null ? `${t.strike} ` : ""}
+              {t.expiration ?? ""}
+            </p>
+          ) : null}
+        </td>
+        <td className="max-w-[10rem] px-3 py-2.5 text-xs leading-snug text-zinc-700 dark:text-zinc-300">
+          {t.side ?? "—"}
+        </td>
+        <td className="px-3 py-2.5 text-zinc-800 dark:text-zinc-200">
+          {formatOptionType(t.optionType)}
+        </td>
+        <td className="px-3 py-2.5 text-right tabular-nums text-zinc-800 dark:text-zinc-200">
+          {t.price != null ? formatMoney(t.price) : "—"}
+        </td>
+        <td className="whitespace-nowrap px-3 py-2.5 text-zinc-600 dark:text-zinc-400">
+          <span className="block text-zinc-900 dark:text-zinc-100">
+            {dateEntered.toLocaleDateString(undefined, {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })}
+          </span>
+          <span className="text-[11px]">
+            {dateEntered.toLocaleTimeString(undefined, {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </span>
+        </td>
+        <td className="px-3 py-2.5 text-right tabular-nums text-zinc-800 dark:text-zinc-200">
+          {formatMoney(net)}
+        </td>
+        <td
+          className={`px-3 py-2.5 text-right font-medium ${pnl !== undefined && pnl !== null ? pnlClass(pnl) : "text-zinc-400"}`}
+        >
+          {pnl !== undefined && pnl !== null ? formatMoney(pnl) : "—"}
+        </td>
+        <td
+          className={`px-3 py-2.5 text-right font-semibold ${pnlClass(cumulativePnl)}`}
+        >
+          {formatMoney(cumulativePnl)}
+        </td>
+        <td className="px-3 py-2.5 text-xs">
+          <span
+            className={
+              sheetsOk
+                ? "text-emerald-700 dark:text-emerald-400"
+                : t.sheetsSyncError
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-zinc-500"
+            }
+          >
+            {sheetsLabel}
+          </span>
+          {t.sheetsSyncError ? (
+            <span
+              className="mt-0.5 block max-w-[120px] truncate text-[10px] text-red-500"
+              title={t.sheetsSyncError}
+            >
+              {t.sheetsSyncError}
+            </span>
+          ) : null}
+        </td>
+        <td className="space-x-2 px-3 py-2.5 whitespace-nowrap">
+          <button
+            type="button"
+            className="text-sm text-emerald-700 dark:text-emerald-400"
+            onClick={() => {
+              setDraft(tradeDraftFromTrade(t));
+              setEditing(true);
+            }}
+          >
+            Edit
+          </button>
+          {!sheetsOk ? (
+            <button
+              type="button"
+              className="text-sm text-zinc-600 underline dark:text-zinc-400"
+              onClick={onRetrySheets}
+            >
+              Retry Sheets
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="text-sm text-red-600 hover:underline dark:text-red-400"
+            onClick={onDelete}
+          >
+            Delete
+          </button>
+        </td>
+      </tr>
+      {t.ingestError ? (
         <tr className="border-b border-zinc-100 dark:border-zinc-800">
           <td
-            colSpan={12}
+            colSpan={COLS}
             className="px-3 py-1 text-xs text-red-600 dark:text-red-400"
           >
             {t.ingestError}

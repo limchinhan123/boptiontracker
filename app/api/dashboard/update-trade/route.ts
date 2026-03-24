@@ -45,6 +45,7 @@ export async function PATCH(request: Request) {
       strategyTag?: string;
       notes?: string;
       needsReview?: boolean;
+      realizedPnl?: number;
     },
   });
   return NextResponse.json({ ok: true });
