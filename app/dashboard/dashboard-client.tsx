@@ -92,6 +92,99 @@ function formatMonthKey(ym: string): string {
   return d.toLocaleDateString(undefined, { month: "short", year: "numeric" });
 }
 
+type SortKey =
+  | "createdAt"
+  | "underlying"
+  | "side"
+  | "optionType"
+  | "price"
+  | "net"
+  | "realizedPnl";
+
+/** Compare for ascending order; caller may invert for desc. */
+function compareTradesByKey(a: TradeRow, b: TradeRow, key: SortKey): number {
+  switch (key) {
+    case "createdAt":
+      return a.createdAt - b.createdAt;
+    case "underlying":
+      return (a.underlying ?? "").localeCompare(b.underlying ?? "", undefined, {
+        sensitivity: "base",
+      });
+    case "side":
+      return (a.side ?? "").localeCompare(b.side ?? "", undefined, {
+        sensitivity: "base",
+      });
+    case "optionType":
+      return (a.optionType ?? "").localeCompare(b.optionType ?? "");
+    case "price": {
+      const pa = a.price;
+      const pb = b.price;
+      if (pa == null && pb == null) return 0;
+      if (pa == null) return 1;
+      if (pb == null) return -1;
+      return pa - pb;
+    }
+    case "net": {
+      const na = computeNetAmount(a);
+      const nb = computeNetAmount(b);
+      if (na == null && nb == null) return 0;
+      if (na == null) return 1;
+      if (nb == null) return -1;
+      return na - nb;
+    }
+    case "realizedPnl": {
+      const pa = a.realizedPnl;
+      const pb = b.realizedPnl;
+      if (pa == null && pb == null) return 0;
+      if (pa == null) return 1;
+      if (pb == null) return -1;
+      return pa - pb;
+    }
+    default:
+      return 0;
+  }
+}
+
+function SortTh({
+  label,
+  columnKey,
+  currentKey,
+  dir,
+  onSort,
+  align = "left",
+}: {
+  label: string;
+  columnKey: SortKey;
+  currentKey: SortKey;
+  dir: "asc" | "desc";
+  onSort: (k: SortKey) => void;
+  align?: "left" | "right";
+}) {
+  const active = currentKey === columnKey;
+  const alignClass = align === "right" ? "text-right" : "text-left";
+  const btnAlign = align === "right" ? "justify-end" : "justify-start";
+  return (
+    <th
+      scope="col"
+      className={`px-3 py-2.5 ${alignClass}`}
+      aria-sort={
+        active ? (dir === "asc" ? "ascending" : "descending") : "none"
+      }
+    >
+      <button
+        type="button"
+        onClick={() => onSort(columnKey)}
+        className={`inline-flex w-full items-center gap-1 font-medium uppercase tracking-wide ${btnAlign} text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200`}
+      >
+        <span>{label}</span>
+        <span className="select-none text-[10px] opacity-70" aria-hidden>
+          {active ? (dir === "asc" ? "▲" : "▼") : "⇅"}
+        </span>
+      </button>
+    </th>
+  );
+}
+
 export default function DashboardClient() {
   const [trades, setTrades] = useState<TradeRow[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -99,6 +192,8 @@ export default function DashboardClient() {
   const [needsReviewOnly, setNeedsReviewOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("createdAt");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const load = useCallback(async () => {
     try {
@@ -193,18 +288,33 @@ export default function DashboardClient() {
     }));
   }, [stats]);
 
-  /** Oldest first so cumulative P&L reads naturally down the page. */
+  function onSortColumn(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
+
+  /** Sorted rows; cumulative P&L is running total in **current display order**. */
   const tableRows = useMemo(() => {
     const list = Array.isArray(trades) ? trades : [];
-    const sorted = [...list].sort((a, b) => a.createdAt - b.createdAt);
-    return sorted.reduce<{ trade: TradeRow; cumulativePnl: number }[]>(
-      (acc, trade) => {
-        const prev = acc.at(-1)?.cumulativePnl ?? 0;
-        return [...acc, { trade, cumulativePnl: prev + (trade.realizedPnl ?? 0) }];
-      },
-      [],
-    );
-  }, [trades]);
+    const sorted = [...list].sort((a, b) => {
+      const c = compareTradesByKey(a, b, sortKey);
+      return sortDir === "asc" ? c : -c;
+    });
+    let cum = 0;
+    return sorted.map((trade) => {
+      cum += trade.realizedPnl ?? 0;
+      return { trade, cumulativePnl: cum };
+    });
+  }, [trades, sortKey, sortDir]);
+
+  const monthPnlRows = useMemo(() => {
+    if (!stats?.byMonth?.length) return [];
+    return [...stats.byMonth].sort((a, b) => a.month.localeCompare(b.month));
+  }, [stats]);
 
   async function deleteOneTrade(tradeId: string) {
     if (!window.confirm("Delete this trade? This cannot be undone.")) return;
@@ -274,7 +384,8 @@ export default function DashboardClient() {
             <span className="font-medium text-zinc-600 dark:text-zinc-300">
               P&amp;L
             </span>{" "}
-            per row in Edit for a running cumulative total. Use{" "}
+            per row in Edit. Sort columns to reorder; cumulative P&amp;L updates in
+            that order. Use{" "}
             <span className="font-medium text-zinc-600 dark:text-zinc-300">
               Download Excel
             </span>{" "}
@@ -297,6 +408,48 @@ export default function DashboardClient() {
             value={formatMoney(stats.totalRealizedPnl)}
             valueClassName={pnlClass(stats.totalRealizedPnl)}
           />
+        </section>
+      ) : null}
+
+      {monthPnlRows.length > 0 ? (
+        <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            Profit &amp; loss by month
+          </h2>
+          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+            Realized P&amp;L grouped by calendar month (same data as the chart below).
+          </p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[18rem] text-sm">
+              <thead>
+                <tr className="border-b border-zinc-200 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                  <th className="py-2 pr-4 font-medium">Month</th>
+                  <th className="py-2 pr-4 text-right font-medium">Trades</th>
+                  <th className="py-2 text-right font-medium">P&amp;L</th>
+                </tr>
+              </thead>
+              <tbody>
+                {monthPnlRows.map((row) => (
+                  <tr
+                    key={row.month}
+                    className="border-b border-zinc-100 dark:border-zinc-800/80"
+                  >
+                    <td className="py-2 pr-4 text-zinc-800 dark:text-zinc-200">
+                      {formatMonthKey(row.month)}
+                    </td>
+                    <td className="py-2 pr-4 text-right tabular-nums text-zinc-600 dark:text-zinc-300">
+                      {row.count}
+                    </td>
+                    <td
+                      className={`py-2 text-right font-medium tabular-nums ${pnlClass(row.pnl)}`}
+                    >
+                      {formatMoney(row.pnl)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       ) : null}
 
@@ -356,14 +509,64 @@ export default function DashboardClient() {
         <table className="w-full min-w-[72rem] text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
             <tr>
-              <th className="px-3 py-2.5">Underlying</th>
-              <th className="px-3 py-2.5">Action</th>
-              <th className="px-3 py-2.5">Type</th>
-              <th className="px-3 py-2.5 text-right">Price</th>
-              <th className="px-3 py-2.5">Date entered</th>
-              <th className="px-3 py-2.5 text-right">Net amount</th>
-              <th className="px-3 py-2.5 text-right">P&amp;L</th>
-              <th className="px-3 py-2.5 text-right">Cumulative P&amp;L</th>
+              <SortTh
+                label="Underlying"
+                columnKey="underlying"
+                currentKey={sortKey}
+                dir={sortDir}
+                onSort={onSortColumn}
+              />
+              <SortTh
+                label="Action"
+                columnKey="side"
+                currentKey={sortKey}
+                dir={sortDir}
+                onSort={onSortColumn}
+              />
+              <SortTh
+                label="Type"
+                columnKey="optionType"
+                currentKey={sortKey}
+                dir={sortDir}
+                onSort={onSortColumn}
+              />
+              <SortTh
+                label="Price"
+                columnKey="price"
+                currentKey={sortKey}
+                dir={sortDir}
+                onSort={onSortColumn}
+                align="right"
+              />
+              <SortTh
+                label="Date entered"
+                columnKey="createdAt"
+                currentKey={sortKey}
+                dir={sortDir}
+                onSort={onSortColumn}
+              />
+              <SortTh
+                label="Net amount"
+                columnKey="net"
+                currentKey={sortKey}
+                dir={sortDir}
+                onSort={onSortColumn}
+                align="right"
+              />
+              <SortTh
+                label="P&L"
+                columnKey="realizedPnl"
+                currentKey={sortKey}
+                dir={sortDir}
+                onSort={onSortColumn}
+                align="right"
+              />
+              <th
+                className="px-3 py-2.5 text-right font-medium"
+                title="Running total of realized P&amp;L in the current sort order"
+              >
+                Cumulative P&amp;L
+              </th>
               <th className="px-3 py-2.5">Actions</th>
             </tr>
           </thead>
