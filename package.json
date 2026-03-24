@@ -9,7 +9,9 @@
     "lint": "eslint",
     "convex:dev": "convex dev",
     "telegram:set-webhook": "node scripts/set-telegram-webhook.mjs",
-    "vercel:push-env": "node scripts/push-env-to-vercel.mjs"
+    "vercel:push-env": "node scripts/push-env-to-vercel.mjs",
+    "convex:sync-secrets": "node scripts/sync-convex-secrets-from-local.mjs",
+    "convex:sync-secrets:prod": "node scripts/sync-convex-secrets-from-local.mjs --prod"
   },
   "dependencies": {
     "convex": "^1.34.0",
