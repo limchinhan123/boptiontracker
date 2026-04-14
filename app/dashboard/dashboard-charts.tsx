@@ -1,6 +1,7 @@
 "use client";
 
 import { Component, type ReactNode, useEffect, useState } from "react";
+import type { TooltipProps } from "recharts";
 import {
   Bar,
   BarChart,
@@ -113,15 +114,35 @@ function ChartsInner({ byUnderlying, monthChartData }: DashboardChartsProps) {
               }}
             />
             <Tooltip
-              formatter={(value, name) => {
-                if (value == null) return ["—", String(name ?? "")];
-                const num =
-                  typeof value === "number" ? value : Number(value);
-                if (Number.isNaN(num))
-                  return [String(value), String(name ?? "")];
-                if (name === "pnl") return [formatMoney(num), "P&L"];
-                return [String(num), "Trades"];
-              }}
+              formatter={
+                ((value, name, item) => {
+                  if (value == null) return ["—", String(name ?? "")];
+                  const num =
+                    typeof value === "number" ? value : Number(value);
+                  if (Number.isNaN(num))
+                    return [String(value), String(name ?? "")];
+
+                  const dataKey = item?.dataKey;
+                  const isPnl = dataKey === "pnl" || name === "P&L";
+
+                  if (isPnl) {
+                    const money = formatMoney(num);
+                    const colorClass =
+                      num < 0
+                        ? "text-red-600 dark:text-red-400"
+                        : num > 0
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-zinc-700 dark:text-zinc-300";
+                    return [
+                      <span key="pnl" className={colorClass}>
+                        {money}
+                      </span>,
+                      "P&L",
+                    ];
+                  }
+                  return [String(num), "Trades"];
+                }) satisfies NonNullable<TooltipProps["formatter"]>
+              }
             />
             <Bar
               yAxisId="left"
@@ -135,9 +156,34 @@ function ChartsInner({ byUnderlying, monthChartData }: DashboardChartsProps) {
               type="monotone"
               dataKey="pnl"
               name="P&L"
-              stroke="#7c3aed"
+              stroke="#64748b"
               strokeWidth={2}
-              dot={{ r: 3 }}
+              dot={(dotProps) => {
+                const { cx, cy, payload } = dotProps as {
+                  cx?: number;
+                  cy?: number;
+                  payload?: { pnl?: number };
+                };
+                if (
+                  cx == null ||
+                  cy == null ||
+                  typeof payload?.pnl !== "number"
+                ) {
+                  return null;
+                }
+                const pnl = payload.pnl;
+                const fill =
+                  pnl < 0 ? "#dc2626" : pnl > 0 ? "#059669" : "#71717a";
+                return (
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={3}
+                    fill={fill}
+                    stroke={fill}
+                  />
+                );
+              }}
             />
           </ComposedChart>
         </ResponsiveContainer>
