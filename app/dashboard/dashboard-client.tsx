@@ -10,6 +10,8 @@ const DashboardCharts = dynamic(() => import("./dashboard-charts"), {
     <section className="grid gap-6 lg:grid-cols-2">
       <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
       <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
+      <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
+      <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
     </section>
   ),
 });
@@ -82,6 +84,7 @@ type Stats = {
   totalTrades: number;
   totalRealizedPnl: number;
   byUnderlying: { underlying: string; count: number }[];
+  byUnderlyingPnl: { underlying: string; pnl: number }[];
   byMonth: { month: string; count: number; pnl: number }[];
 };
 
@@ -232,6 +235,9 @@ export default function DashboardClient() {
         totalTrades: Number(so.totalTrades) || 0,
         totalRealizedPnl: Number(so.totalRealizedPnl) || 0,
         byUnderlying: Array.isArray(so.byUnderlying) ? so.byUnderlying : [],
+        byUnderlyingPnl: Array.isArray(so.byUnderlyingPnl)
+          ? so.byUnderlyingPnl
+          : [],
         byMonth: Array.isArray(so.byMonth) ? so.byMonth : [],
       };
       return { ok: true as const, trades, stats };
@@ -460,6 +466,7 @@ export default function DashboardClient() {
 
       <DashboardCharts
         byUnderlying={stats?.byUnderlying ?? []}
+        byUnderlyingPnl={stats?.byUnderlyingPnl ?? []}
         monthChartData={monthChartData}
       />
 

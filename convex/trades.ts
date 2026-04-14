@@ -181,6 +181,9 @@ export const stats = query({
     byUnderlying: v.array(
       v.object({ underlying: v.string(), count: v.number() }),
     ),
+    byUnderlyingPnl: v.array(
+      v.object({ underlying: v.string(), pnl: v.number() }),
+    ),
     byMonth: v.array(
       v.object({
         month: v.string(),
@@ -202,11 +205,14 @@ export const stats = query({
       0,
     );
 
-    const underlyingMap = new Map<string, number>();
+    const underlyingMap = new Map<string, { count: number; pnl: number }>();
     const monthMap = new Map<string, { count: number; pnl: number }>();
     for (const t of all) {
       const u = (t.underlying ?? "UNKNOWN").toUpperCase();
-      underlyingMap.set(u, (underlyingMap.get(u) ?? 0) + 1);
+      const uCur = underlyingMap.get(u) ?? { count: 0, pnl: 0 };
+      uCur.count += 1;
+      uCur.pnl += t.realizedPnl ?? 0;
+      underlyingMap.set(u, uCur);
 
       const created = new Date(t.createdAt);
       const monthKey = Number.isNaN(created.getTime())
@@ -218,10 +224,18 @@ export const stats = query({
       monthMap.set(monthKey, cur);
     }
 
-    const byUnderlying = [...underlyingMap.entries()]
-      .map(([underlying, count]) => ({ underlying, count }))
-      .sort((a, b) => b.count - a.count)
+    const topUnderlyings = [...underlyingMap.entries()]
+      .sort((a, b) => b[1].count - a[1].count)
       .slice(0, 12);
+
+    const byUnderlying = topUnderlyings.map(([underlying, v]) => ({
+      underlying,
+      count: v.count,
+    }));
+    const byUnderlyingPnl = topUnderlyings.map(([underlying, v]) => ({
+      underlying,
+      pnl: v.pnl,
+    }));
 
     const byMonth = [...monthMap.entries()]
       .map(([month, v]) => ({
@@ -235,6 +249,7 @@ export const stats = query({
       totalTrades,
       totalRealizedPnl,
       byUnderlying,
+      byUnderlyingPnl,
       byMonth,
     };
   },
