@@ -1,13 +1,12 @@
 "use client";
 
 import { Component, type ReactNode, useEffect, useState } from "react";
-import type { TooltipProps } from "recharts";
 import {
   Bar,
   BarChart,
   CartesianGrid,
-  ComposedChart,
-  Line,
+  Cell,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -20,6 +19,16 @@ function formatMoney(n: number | null | undefined, currency = "USD"): string {
     style: "currency",
     currency,
     maximumFractionDigits: 2,
+  }).format(n);
+}
+
+function formatCompactAxisTick(v: number | string | undefined): string {
+  if (v == null || (typeof v === "number" && Number.isNaN(v))) return "—";
+  const n = typeof v === "number" ? v : Number(v);
+  if (Number.isNaN(n)) return "—";
+  return new Intl.NumberFormat(undefined, {
+    notation: "compact",
+    maximumFractionDigits: 1,
   }).format(n);
 }
 
@@ -76,56 +85,73 @@ function ChartsInner({ byUnderlying, monthChartData }: DashboardChartsProps) {
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="h-64 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-          Breakdown by month
-        </h2>
-        <p className="mb-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-          Bars: trade count · Line: sum of P&amp;L (realized) in that month
-        </p>
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={monthChartData}>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              className="stroke-zinc-200 dark:stroke-zinc-700"
-            />
-            <XAxis dataKey="monthLabel" tick={{ fontSize: 10 }} />
-            <YAxis
-              yAxisId="left"
-              allowDecimals={false}
-              tick={{ fontSize: 10 }}
-              width={32}
-            />
-            <YAxis
-              yAxisId="right"
-              orientation="right"
-              tick={{ fontSize: 10 }}
-              width={40}
-              tickFormatter={(v) => {
-                if (v == null || (typeof v === "number" && Number.isNaN(v))) {
-                  return "—";
-                }
-                const n = typeof v === "number" ? v : Number(v);
-                if (Number.isNaN(n)) return "—";
-                return new Intl.NumberFormat(undefined, {
-                  notation: "compact",
-                  maximumFractionDigits: 1,
-                }).format(n);
-              }}
-            />
-            <Tooltip
-              formatter={
-                ((value, name, item) => {
-                  if (value == null) return ["—", String(name ?? "")];
-                  const num =
-                    typeof value === "number" ? value : Number(value);
-                  if (Number.isNaN(num))
-                    return [String(value), String(name ?? "")];
-
-                  const dataKey = item?.dataKey;
-                  const isPnl = dataKey === "pnl" || name === "P&L";
-
-                  if (isPnl) {
+      <div className="flex flex-col gap-4">
+        <div className="flex h-64 flex-col rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="shrink-0 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Trades by month
+          </h2>
+          <p className="mb-1 shrink-0 text-[11px] text-zinc-500 dark:text-zinc-400">
+            Number of trades in each month
+          </p>
+          <div className="min-h-0 min-w-0 flex-1">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthChartData}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  className="stroke-zinc-200 dark:stroke-zinc-700"
+                />
+                <XAxis dataKey="monthLabel" tick={{ fontSize: 10 }} />
+                <YAxis
+                  allowDecimals={false}
+                  tick={{ fontSize: 10 }}
+                  width={32}
+                />
+                <Tooltip
+                  formatter={(value) => {
+                    if (value == null) return ["—", "Trades"];
+                    const n =
+                      typeof value === "number" ? value : Number(value);
+                    if (Number.isNaN(n)) return [String(value), "Trades"];
+                    return [String(n), "Trades"];
+                  }}
+                />
+                <Bar
+                  dataKey="count"
+                  fill="#059669"
+                  name="Trades"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <div className="flex h-64 flex-col rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="shrink-0 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Realized P&amp;L by month
+          </h2>
+          <p className="mb-1 shrink-0 text-[11px] text-zinc-500 dark:text-zinc-400">
+            Sum of realized P&amp;L booked in each month
+          </p>
+          <div className="min-h-0 min-w-0 flex-1">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthChartData}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  className="stroke-zinc-200 dark:stroke-zinc-700"
+                />
+                <XAxis dataKey="monthLabel" tick={{ fontSize: 10 }} />
+                <YAxis
+                  tick={{ fontSize: 10 }}
+                  width={44}
+                  tickFormatter={formatCompactAxisTick}
+                />
+                <Tooltip
+                  formatter={(value) => {
+                    if (value == null) return ["—", "P&L"];
+                    const num =
+                      typeof value === "number" ? value : Number(value);
+                    if (Number.isNaN(num))
+                      return [String(value ?? "—"), "P&L"];
                     const money = formatMoney(num);
                     const colorClass =
                       num < 0
@@ -139,54 +165,31 @@ function ChartsInner({ byUnderlying, monthChartData }: DashboardChartsProps) {
                       </span>,
                       "P&L",
                     ];
-                  }
-                  return [String(num), "Trades"];
-                }) satisfies NonNullable<TooltipProps["formatter"]>
-              }
-            />
-            <Bar
-              yAxisId="left"
-              dataKey="count"
-              fill="#059669"
-              name="Trades"
-              radius={[4, 4, 0, 0]}
-            />
-            <Line
-              yAxisId="right"
-              type="monotone"
-              dataKey="pnl"
-              name="P&L"
-              stroke="#64748b"
-              strokeWidth={2}
-              dot={(dotProps) => {
-                const { cx, cy, payload } = dotProps as {
-                  cx?: number;
-                  cy?: number;
-                  payload?: { pnl?: number };
-                };
-                if (
-                  cx == null ||
-                  cy == null ||
-                  typeof payload?.pnl !== "number"
-                ) {
-                  return null;
-                }
-                const pnl = payload.pnl;
-                const fill =
-                  pnl < 0 ? "#dc2626" : pnl > 0 ? "#059669" : "#71717a";
-                return (
-                  <circle
-                    cx={cx}
-                    cy={cy}
-                    r={3}
-                    fill={fill}
-                    stroke={fill}
-                  />
-                );
-              }}
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
+                  }}
+                />
+                <ReferenceLine
+                  y={0}
+                  stroke="#a1a1aa"
+                  strokeDasharray="4 4"
+                />
+                <Bar dataKey="pnl" name="P&L" radius={[4, 4, 0, 0]}>
+                  {monthChartData.map((row) => (
+                    <Cell
+                      key={row.month}
+                      fill={
+                        row.pnl < 0
+                          ? "#dc2626"
+                          : row.pnl > 0
+                            ? "#059669"
+                            : "#71717a"
+                      }
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -203,7 +206,10 @@ export default function DashboardCharts(props: DashboardChartsProps) {
     return (
       <section className="grid gap-6 lg:grid-cols-2">
         <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
-        <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
+        <div className="flex flex-col gap-4">
+          <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
+          <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
+        </div>
       </section>
     );
   }
