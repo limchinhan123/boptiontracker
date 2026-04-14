@@ -294,6 +294,29 @@ export default function DashboardClient() {
     }));
   }, [stats]);
 
+  /**
+   * Prefer Convex `byUnderlyingPnl` (sums over the same sample as other stats).
+   * If the field is missing (older deployment) or empty while tickers exist,
+   * derive P&L from the loaded trade rows so the chart is not blank.
+   */
+  const underlyingPnlChartData = useMemo(() => {
+    const fromApi = stats?.byUnderlyingPnl;
+    if (fromApi && fromApi.length > 0) return fromApi;
+
+    const order = stats?.byUnderlying ?? [];
+    if (!order.length) return [];
+
+    const pnlByU = new Map<string, number>();
+    for (const t of trades) {
+      const u = (t.underlying ?? "UNKNOWN").toUpperCase();
+      pnlByU.set(u, (pnlByU.get(u) ?? 0) + (t.realizedPnl ?? 0));
+    }
+    return order.map(({ underlying }) => ({
+      underlying,
+      pnl: pnlByU.get(underlying.toUpperCase()) ?? 0,
+    }));
+  }, [stats?.byUnderlyingPnl, stats?.byUnderlying, trades]);
+
   function onSortColumn(key: SortKey) {
     if (key === sortKey) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -466,7 +489,7 @@ export default function DashboardClient() {
 
       <DashboardCharts
         byUnderlying={stats?.byUnderlying ?? []}
-        byUnderlyingPnl={stats?.byUnderlyingPnl ?? []}
+        byUnderlyingPnl={underlyingPnlChartData}
         monthChartData={monthChartData}
       />
 
