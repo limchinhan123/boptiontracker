@@ -1,137 +1,112 @@
-# Options trade dashboard
+<div align="center">
+  <h1>Options Trade Dashboard 📈</h1>
 
-Capture **Interactive Brokers (IBKR)** option trades from **Telegram** screenshots, extract structured fields with **OpenAI**, store them in **Convex**, and review them on a password-protected **Next.js** dashboard—with charts, sorting, monthly P&amp;L summaries, and **Excel export**.
+  **An automated, AI-powered options trade journal and analytics dashboard.**
 
-## Features
+  [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)](https://www.typescriptlang.org/)
+  [![Convex](https://img.shields.io/badge/Convex-Backend-FF5A5F?logo=convex)](https://www.convex.dev/)
+  [![OpenAI](https://img.shields.io/badge/OpenAI-Vision_LLM-412991?logo=openai)](https://openai.com/)
+  [![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
+</div>
 
-- **Telegram ingest** — Send a screenshot to your bot; the app downloads the image, runs vision LLM extraction, and writes trade legs to Convex.
-- **Dashboard** — Filter by underlying / “needs review”, edit fields (including realized P&amp;L), charts by underlying and by month, **sortable** table columns, running **cumulative P&amp;L** (follows current sort order).
-- **Excel export** — `Download Excel` on the dashboard (authenticated); respects filters, up to 500 rows per export.
-- **Convex backend** — Queries/mutations/actions for trades, ingest pipeline, and scheduled work.
+---
 
-## Tech stack
+## 📖 Overview
 
-| Layer | Technology |
-|--------|------------|
-| App | [Next.js](https://nextjs.org) 16 (App Router), React 19, Tailwind CSS 4 |
-| Backend | [Convex](https://convex.dev) (queries, mutations, Node actions for OpenAI) |
-| Charts | [Recharts](https://recharts.org) |
-| Export | [exceljs](https://github.com/exceljs/exceljs) |
+**Options Trade Dashboard** solves the friction of manual trade journaling for options traders. Instead of manually entering legs, strikes, and premiums into a spreadsheet, you simply send a screenshot of your **Interactive Brokers (IBKR)** execution screen to a Telegram bot. 
 
-## Prerequisites
+The application automatically downloads the image, processes it through OpenAI's Vision models to extract structured trade data, saves it securely to a Convex database, and visualises your performance on a password-protected Next.js dashboard.
 
-- Node.js 20+ recommended  
-- npm  
-- A [Convex](https://dashboard.convex.dev) project  
-- A [Telegram Bot](https://core.telegram.org/bots/tutorial) token  
-- An [OpenAI](https://platform.openai.com/) API key (used from Convex)
+## ✨ Key Features
 
-## Quick start (local)
+- **Automated Telegram Ingest:** Send an IBKR screenshot to your bot; the system handles image extraction, runs vision LLM parsing, and maps the output to a strict database schema.
+- **AI-Powered Data Extraction:** Uses `gpt-4o` to reliably parse complex option legs, identifying underlying assets, option types (call/put), strikes, expirations, execution prices, fees, and Realized P&L.
+- **Interactive Analytics Dashboard:** 
+  - **Live Auto-Refresh:** The dashboard polls for new trades every 5 seconds.
+  - **Visualizations:** View top underlyings by trade count, monthly trade volume, and P&L breakdowns via Recharts.
+  - **Cumulative P&L:** A running cumulative P&L metric that dynamically updates based on your current table sort order.
+- **Editable Trade Journal:** Flag ambiguous extractions for manual review (`needsReview`), edit any parsed field, and add custom strategy tags or notes directly from the UI.
+- **Excel Export:** Download up to 500 filtered, sorted rows into a clean `.xlsx` workbook using `exceljs`, perfect for tax reporting or deeper spreadsheet analysis.
 
-1. **Clone and install**
+## 🛠️ Tech Stack
 
+- **Frontend:** [Next.js](https://nextjs.org) (App Router), React 19, Tailwind CSS 4
+- **Backend & Database:** [Convex](https://convex.dev) (for real-time queries, mutations, and Node-based server actions)
+- **AI Integration:** [OpenAI](https://openai.com/) API (Vision + JSON Schema extraction)
+- **Charts & Export:** [Recharts](https://recharts.org) and [ExcelJS](https://github.com/exceljs/exceljs)
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js 20+ and npm
+- A [Convex](https://dashboard.convex.dev) project
+- A [Telegram Bot Token](https://core.telegram.org/bots/tutorial)
+- An [OpenAI](https://platform.openai.com/) API key
+
+### Local Development Setup
+
+1. **Clone the repository:**
    ```bash
    git clone https://github.com/limchinhan123/boptiontracker.git
    cd boptiontracker
    npm install
    ```
 
-2. **Environment** — Copy the example file and fill in values (never commit real secrets):
-
+2. **Configure Environment Variables:**
+   Copy the example environment file:
    ```bash
    cp .env.example .env.local
    ```
+   *Note: Convex does not read `.env.local`. You must set `OPENAI_API_KEY`, `INGEST_SECRET`, and `DASHBOARD_SECRET` directly in the Convex dashboard for your deployment.*
 
-   See [Environment variables](#environment-variables) below.
-
-3. **Convex** — In one terminal:
-
+3. **Start Convex (Terminal 1):**
    ```bash
    npx convex dev
    ```
+   This syncs your schema and functions to the Convex dev cloud.
 
-   This syncs functions, sets `NEXT_PUBLIC_CONVEX_URL` for dev, and opens the dashboard link. Set **Convex → Settings → Environment variables** for `OPENAI_API_KEY`, `INGEST_SECRET`, and `DASHBOARD_SECRET` (and keep the same secrets in `.env.local` for Next.js where noted).
-
-4. **Next.js** — In another terminal:
-
+4. **Start Next.js (Terminal 2):**
    ```bash
    npm run dev
    ```
+   Open [http://localhost:3000](http://localhost:3000), log in using your `DASHBOARD_SECRET`, and navigate to `/dashboard`.
 
-5. Open [http://localhost:3000](http://localhost:3000), sign in at `/login` with `DASHBOARD_SECRET`, then open `/dashboard`.
+## 🤖 Telegram Webhook Configuration
 
-## Environment variables
+To enable the automated screenshot pipeline, your app must be reachable via a public HTTPS URL (e.g., deployed on Vercel).
 
-| Variable | Where | Purpose |
-|----------|--------|---------|
-| `NEXT_PUBLIC_CONVEX_URL` | Next.js (`.env.local`, Vercel) | Convex deployment URL for the browser and server Convex client |
-| `DASHBOARD_SECRET` | Next.js **and** Convex | Dashboard login password; secures dashboard API routes and Convex dashboard-gated queries |
-| `INGEST_SECRET` | Next.js **and** Convex | Shared secret so the Telegram webhook can call Convex ingest |
-| `OPENAI_API_KEY` | **Convex dashboard only** | Vision + JSON extraction in `convex/ingest.ts` |
-| `OPENAI_VISION_MODEL` | Convex (optional) | Defaults to `gpt-4o` |
-| `TELEGRAM_BOT_TOKEN` | Next.js (Vercel) | Bot API token to fetch photos |
-| `TELEGRAM_WEBHOOK_SECRET` | Next.js (Vercel) | Must match Telegram `setWebhook` `secret_token` |
-| `PUBLIC_APP_URL` | `.env.local` (for script) | HTTPS origin, no trailing slash — used by `npm run telegram:set-webhook` |
-
-Convex does not read `.env.local`. Duplicate `DASHBOARD_SECRET` and `INGEST_SECRET` in the Convex dashboard for the **same** deployment as `NEXT_PUBLIC_CONVEX_URL`, or dashboard/API calls will fail with unauthorized errors.
-
-Helper: `npm run convex:sync-secrets` / `npm run convex:sync-secrets:prod` copies `DASHBOARD_SECRET` and `INGEST_SECRET` from `.env.local` to the Convex deployment the CLI targets (see script headers for details).
-
-## Telegram webhook
-
-After the app is reachable at a public **HTTPS** URL (e.g. Vercel):
-
-1. Set `PUBLIC_APP_URL` in `.env.local` (e.g. `https://your-app.vercel.app`).
-2. Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` in `.env.local` and in **Vercel** env for production.
-3. Run:
-
+1. Set `PUBLIC_APP_URL` in `.env.local` to your live domain (e.g., `https://your-app.vercel.app`).
+2. Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` in both `.env.local` and your production hosting environment.
+3. Register the webhook by running:
    ```bash
    npm run telegram:set-webhook
    ```
+4. Send a photo to your Telegram bot to trigger the ingest pipeline. *(Note: Text messages are ignored by the webhook).*
 
-4. Send a **photo** (screenshot) to the bot. Non-photo messages are ignored by the webhook handler.
+## 🔒 Security & Environment Variables
 
-Webhook path: `POST /api/telegram/webhook`.
+| Variable | Location | Purpose |
+|----------|----------|---------|
+| `NEXT_PUBLIC_CONVEX_URL` | Next.js (`.env.local`, Vercel) | Connects the client/server to your Convex instance. |
+| `DASHBOARD_SECRET` | Next.js **&** Convex | The password to access the dashboard and secure API routes. |
+| `INGEST_SECRET` | Next.js **&** Convex | Shared secret authenticating Telegram webhook calls to Convex. |
+| `OPENAI_API_KEY` | **Convex Dashboard Only** | Used in `convex/ingest.ts` for vision extraction. |
+| `TELEGRAM_BOT_TOKEN` | Next.js (Vercel) | Required to fetch images from Telegram. |
+| `TELEGRAM_WEBHOOK_SECRET`| Next.js (Vercel) | Validates incoming requests from Telegram. |
 
-## Production deploy
+*Helper scripts like `npm run convex:sync-secrets` are provided to push local secrets to your Convex dev environment.*
 
-1. **Convex** — `npx convex deploy` to your production deployment; set production env vars in the Convex dashboard.
-2. **Vercel** (or similar) — Connect the Git repo, set the same Next.js env vars as `.env.local`, ensure `NEXT_PUBLIC_CONVEX_URL` points at **production** Convex.
-3. Re-run **`npm run telegram:set-webhook`** with `PUBLIC_APP_URL` set to the production site so Telegram hits the live webhook.
-4. Redeploy the Next app after changing environment variables.
+## 📚 Documentation & Maintenance
 
-## npm scripts
+For ongoing maintenance, operations, and contributor guidelines, please refer to the internal documentation:
+- [`AGENTS.md`](AGENTS.md): Learned preferences, workspace facts, and AI contributor rules.
+- [`docs/CLOSEOUT.md`](docs/CLOSEOUT.md): Pre-deployment checklists, linting, secret rotation, and handoff procedures.
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Next.js dev server |
-| `npm run build` / `npm start` | Production build and run |
-| `npm run convex:dev` | Convex dev sync (or use `npx convex dev`) |
-| `npm run telegram:set-webhook` | Register Telegram webhook from `.env.local` |
-| `npm run convex:sync-secrets` | Push selected secrets from `.env.local` → Convex dev |
-| `npm run convex:sync-secrets:prod` | Same for production Convex |
-| `npm run vercel:push-env` | Push env to Vercel (requires `VERCEL_TOKEN`, etc.) |
+## 📄 License
 
-## Repository layout (high level)
+All rights reserved. This is a private project unless an explicit `LICENSE` file is added.
 
-```
-app/                 # Next.js App Router (pages, dashboard, API routes)
-convex/              # Convex schema, trades, ingest, internal helpers
-docs/                # Runbooks and checklists (e.g. close-out)
-lib/                 # Session cookie helpers, Convex HTTP client
-scripts/             # Webhook + env sync utilities
-```
-
-## Security notes
-
-- Do not commit `.env.local` or API keys.
-- Treat `DASHBOARD_SECRET` as the dashboard password; use a long random value.
-- Rotate credentials if they are ever exposed in chat or logs.
-
-## Maintenance & close-out
-
-Before a milestone or handoff, run through **[docs/CLOSEOUT.md](docs/CLOSEOUT.md)** (lint, build, Convex `tsc`, production env checks, optional git tag). Closing out does **not** stop you from committing new work later—`main` keeps evolving.
-
-## License
-
-Private project unless you add a license file.
+---
+*Repo: [github.com/limchinhan123/boptiontracker](https://github.com/limchinhan123/boptiontracker)*
