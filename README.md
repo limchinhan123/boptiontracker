@@ -21,8 +21,8 @@ The application automatically downloads the image, processes it through OpenAI's
 ## 📸 Screenshots
 
 <div align="center">
-  <img src="docs/screenshot-landing.png" alt="Options Trade Dashboard — Landing page with pipeline overview" width="100%" />
-  <p><em>The app landing page — a clean entry point describing the full pipeline from IBKR screenshot to dashboard review.</em></p>
+  <img src="docs/screenshot-dashboard.png" alt="Options Trade Dashboard — Live analytics dashboard showing P&L by month, trades by underlying, Realized P&L charts, and the sortable trade journal" width="100%" />
+  <p><em>The live analytics dashboard — monthly P&L summary, four Recharts visualisations (trades by underlying, trades by month, realized P&L by underlying, realized P&L by month), and the full sortable trade journal with cumulative P&L tracking.</em></p>
 </div>
 
 ---
