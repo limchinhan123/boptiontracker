@@ -18,6 +18,15 @@
 
 The application automatically downloads the image, processes it through OpenAI's Vision models to extract structured trade data, saves it securely to a Convex database, and visualises your performance on a password-protected Next.js dashboard.
 
+## 📸 Screenshots
+
+<div align="center">
+  <img src="docs/screenshot-landing.png" alt="Options Trade Dashboard — Landing page with pipeline overview" width="100%" />
+  <p><em>The app landing page — a clean entry point describing the full pipeline from IBKR screenshot to dashboard review.</em></p>
+</div>
+
+---
+
 ## ✨ Key Features
 
 - **Automated Telegram Ingest:** Send an IBKR screenshot to your bot; the system handles image extraction, runs vision LLM parsing, and maps the output to a strict database schema.
