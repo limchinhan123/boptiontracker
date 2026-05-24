@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { api, getConvexClient } from "@/lib/convex-server";
+import { parseSnapshotCaption } from "@/lib/parse-snapshot-caption";
 
 export const runtime = "nodejs";
 
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
   const update = body as {
     message?: {
       message_id: number;
+      caption?: string;
       photo?: Array<{ file_id: string; width: number; height: number }>;
     };
   };
@@ -39,6 +41,8 @@ export async function POST(request: Request) {
   if (!msg?.photo?.length) {
     return NextResponse.json({ ok: true, ignored: true });
   }
+
+  const snapshotKind = parseSnapshotCaption(msg.caption);
 
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
@@ -83,16 +87,29 @@ export async function POST(request: Request) {
 
   const client = getConvexClient();
   try {
-    await client.action(api.ingest.processTelegramScreenshot, {
-      ingestSecret,
-      messageId,
-      imageBase64,
-      mimeType,
-    });
+    if (snapshotKind) {
+      await client.action(api.ingest.processTelegramSnapshot, {
+        ingestSecret,
+        messageId,
+        kind: snapshotKind,
+        imageBase64,
+        mimeType,
+      });
+    } else {
+      await client.action(api.ingest.processTelegramScreenshot, {
+        ingestSecret,
+        messageId,
+        imageBase64,
+        mimeType,
+      });
+    }
   } catch (e) {
     console.error("Convex ingest failed", e);
     return new NextResponse("Ingest failed", { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    kind: snapshotKind ?? "trade",
+  });
 }

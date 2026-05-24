@@ -289,6 +289,28 @@ type Stats = {
   byMonth: { month: string; count: number; pnl: number }[];
 };
 
+type AccountSnapshotRow = {
+  _id: string;
+  createdAt: number;
+  kind: "balance" | "position";
+  currency?: string;
+  needsReview: boolean;
+  ingestError?: string;
+  netLiquidation?: number;
+  excessLiquidity?: number;
+  initialMargin?: number;
+  maintenanceMargin?: number;
+  buyingPower?: number;
+  unrealizedPnl?: number;
+  realizedPnl?: number;
+  positions?: { symbol: string }[];
+};
+
+type LatestSnapshots = {
+  balance: AccountSnapshotRow | null;
+  position: AccountSnapshotRow | null;
+};
+
 function formatMonthKey(ym: string): string {
   const [y, m] = ym.split("-");
   if (!y || !m) return ym;
@@ -392,6 +414,7 @@ function SortTh({
 export default function DashboardClient() {
   const [trades, setTrades] = useState<TradeRow[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [snapshots, setSnapshots] = useState<LatestSnapshots | null>(null);
   const [underlying, setUnderlying] = useState("");
   const [needsReviewOnly, setNeedsReviewOnly] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -404,11 +427,12 @@ export default function DashboardClient() {
       const params = new URLSearchParams();
       if (underlying.trim()) params.set("underlying", underlying.trim());
       if (needsReviewOnly) params.set("needsReview", "1");
-      const [tRes, sRes] = await Promise.all([
+      const [tRes, sRes, snapRes] = await Promise.all([
         fetch(`/api/dashboard/trades?${params}`, { credentials: "include" }),
         fetch("/api/dashboard/stats", { credentials: "include" }),
+        fetch("/api/dashboard/snapshots", { credentials: "include" }),
       ]);
-      if (tRes.status === 401 || sRes.status === 401) {
+      if (tRes.status === 401 || sRes.status === 401 || snapRes.status === 401) {
         window.location.href = "/login";
         return { ok: false as const };
       }
@@ -441,7 +465,15 @@ export default function DashboardClient() {
           : [],
         byMonth: Array.isArray(so.byMonth) ? so.byMonth : [],
       };
-      return { ok: true as const, trades, stats };
+      let latestSnapshots: LatestSnapshots = { balance: null, position: null };
+      if (snapRes.ok) {
+        const snapRaw = (await snapRes.json()) as LatestSnapshots;
+        latestSnapshots = {
+          balance: snapRaw.balance ?? null,
+          position: snapRaw.position ?? null,
+        };
+      }
+      return { ok: true as const, trades, stats, snapshots: latestSnapshots };
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Unexpected error loading dashboard";
@@ -464,6 +496,7 @@ export default function DashboardClient() {
       setErr(null);
       setTrades(result.trades);
       setStats(result.stats);
+      setSnapshots(result.snapshots);
       setLoading(false);
     })();
     return () => {
@@ -479,6 +512,7 @@ export default function DashboardClient() {
           if (!result.ok || !("trades" in result)) return;
           setTrades(result.trades);
           setStats(result.stats);
+          if ("snapshots" in result) setSnapshots(result.snapshots);
         } catch {
           /* ignore background refresh errors */
         }
@@ -628,7 +662,16 @@ export default function DashboardClient() {
             <span className="font-medium text-zinc-600 dark:text-zinc-300">
               Download Excel
             </span>{" "}
-            to export (respects filters; up to 500 rows).
+            to export (respects filters; up to 500 rows). Telegram: trade
+            screenshots with no caption; IBKR account screenshots with caption{" "}
+            <span className="font-medium text-zinc-600 dark:text-zinc-300">
+              balance
+            </span>{" "}
+            or{" "}
+            <span className="font-medium text-zinc-600 dark:text-zinc-300">
+              position
+            </span>{" "}
+            (any capitalization).
           </p>
         </div>
         <Link
@@ -649,6 +692,8 @@ export default function DashboardClient() {
           />
         </section>
       ) : null}
+
+      <AccountSnapshotsSection snapshots={snapshots} />
 
       {monthPnlRows.length > 0 ? (
         <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
@@ -857,6 +902,96 @@ function StatCard({
         {value}
       </p>
     </div>
+  );
+}
+
+function AccountSnapshotsSection(props: {
+  snapshots: LatestSnapshots | null;
+}) {
+  const { snapshots } = props;
+  if (!snapshots?.balance && !snapshots?.position) {
+    return (
+      <section className="rounded-xl border border-dashed border-zinc-300 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          Account snapshots
+        </h2>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          Send IBKR Balances screenshot to Telegram with caption{" "}
+          <span className="font-medium">balance</span>, then Portfolio →
+          Positions with caption <span className="font-medium">position</span>.
+        </p>
+      </section>
+    );
+  }
+
+  function fmtSnap(n?: number, currency?: string) {
+    if (n == null) return "—";
+    return formatMoney(n, currency ?? "USD");
+  }
+
+  function fmtWhen(ts: number) {
+    return new Date(ts).toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  return (
+    <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+      <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+        Account snapshots
+      </h2>
+      <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+        Latest Telegram uploads (caption balance / position).
+      </p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        {snapshots.balance ? (
+          <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+            <p className="text-xs font-medium uppercase text-zinc-500">Balance</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              {fmtWhen(snapshots.balance.createdAt)}
+              {snapshots.balance.needsReview ? " · needs review" : ""}
+            </p>
+            <p className="mt-2 text-sm">
+              Net liq {fmtSnap(snapshots.balance.netLiquidation, snapshots.balance.currency)}
+            </p>
+            <p className="text-sm">
+              Excess liq{" "}
+              {fmtSnap(snapshots.balance.excessLiquidity, snapshots.balance.currency)}
+            </p>
+            <p className="text-sm">
+              Init margin{" "}
+              {fmtSnap(snapshots.balance.initialMargin, snapshots.balance.currency)}
+            </p>
+          </div>
+        ) : null}
+        {snapshots.position ? (
+          <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+            <p className="text-xs font-medium uppercase text-zinc-500">Position</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              {fmtWhen(snapshots.position.createdAt)}
+              {snapshots.position.needsReview ? " · needs review" : ""}
+            </p>
+            <p className="mt-2 text-sm">
+              Unrealized{" "}
+              {fmtSnap(snapshots.position.unrealizedPnl, snapshots.position.currency)}
+            </p>
+            <p className="text-sm">
+              Maint margin{" "}
+              {fmtSnap(
+                snapshots.position.maintenanceMargin,
+                snapshots.position.currency,
+              )}
+            </p>
+            <p className="text-sm">
+              Positions tracked: {snapshots.position.positions?.length ?? 0}
+            </p>
+          </div>
+        ) : null}
+      </div>
+    </section>
   );
 }
 

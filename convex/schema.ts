@@ -50,4 +50,49 @@ export default defineSchema({
     .index("by_message_leg", ["source", "messageId", "legIndex"])
     .index("by_created", ["createdAt"])
     .index("by_needs_review", ["needsReview", "createdAt"]),
+
+  accountSnapshots: defineTable({
+    createdAt: v.number(),
+    source: v.literal("telegram"),
+    messageId: v.string(),
+    kind: v.union(v.literal("balance"), v.literal("position")),
+    imageStorageId: v.optional(v.id("_storage")),
+    currency: v.optional(v.string()),
+    needsReview: v.boolean(),
+    ingestError: v.optional(v.string()),
+    modelOutput: v.optional(v.string()),
+    confidence: v.optional(v.number()),
+
+    netLiquidation: v.optional(v.number()),
+    cash: v.optional(v.number()),
+    buyingPower: v.optional(v.number()),
+    availableFunds: v.optional(v.number()),
+    excessLiquidity: v.optional(v.number()),
+    initialMargin: v.optional(v.number()),
+    maintenanceMargin: v.optional(v.number()),
+    regTMargin: v.optional(v.number()),
+    securitiesGrossPositionValue: v.optional(v.number()),
+    unrealizedPnl: v.optional(v.number()),
+    realizedPnl: v.optional(v.number()),
+    sma: v.optional(v.number()),
+    theta: v.optional(v.number()),
+    spxDelta: v.optional(v.number()),
+    vega: v.optional(v.number()),
+
+    positions: v.optional(
+      v.array(
+        v.object({
+          symbol: v.string(),
+          description: v.optional(v.string()),
+          pctNetLiq: v.optional(v.number()),
+          unrealizedPnl: v.optional(v.number()),
+          unrealizedPnlPct: v.optional(v.number()),
+          changePct: v.optional(v.number()),
+        }),
+      ),
+    ),
+  })
+    .index("by_created", ["createdAt"])
+    .index("by_kind_created", ["kind", "createdAt"])
+    .index("by_source_message", ["source", "messageId"]),
 });
