@@ -9,6 +9,8 @@ import {
   computeNetAmount,
   computeWorthlessExpirationPnl,
   expirationToPnlDate,
+  getWorthlessCloseWarning,
+  hasStrictCloseMatch,
   hasUnsetRealizedPnl,
   isOpenSide,
 } from "@/lib/worthless-pnl";
@@ -814,6 +816,7 @@ export default function DashboardClient() {
               <TradeTableRow
                 key={t._id}
                 trade={t}
+                allTrades={trades}
                 cumulativePnl={cumulativePnl}
                 onDelete={() => void deleteOneTrade(t._id)}
                 onUpdated={() => void load()}
@@ -883,11 +886,12 @@ function tradeDraftFromTrade(t: TradeRow) {
 
 function TradeTableRow(props: {
   trade: TradeRow;
+  allTrades: TradeRow[];
   cumulativePnl: number;
   onDelete: () => void;
   onUpdated: () => void;
 }) {
-  const { trade: t, cumulativePnl, onDelete, onUpdated } = props;
+  const { trade: t, allTrades, cumulativePnl, onDelete, onUpdated } = props;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(() => tradeDraftFromTrade(t));
   const [worthlessOpen, setWorthlessOpen] = useState(false);
@@ -932,6 +936,19 @@ function TradeTableRow(props: {
   }
 
   async function confirmMarkWorthless() {
+    if (hasStrictCloseMatch(t, allTrades)) {
+      window.alert(
+        "A matching BUY TO CLOSE row exists for this contract. P&L is already on the close row — do not mark worthless here.",
+      );
+      return;
+    }
+    const warning = getWorthlessCloseWarning(t, allTrades);
+    if (
+      warning &&
+      !window.confirm(`${warning}\n\nMark as expired worthless anyway?`)
+    ) {
+      return;
+    }
     const expiration = worthlessExpiration.trim() || t.expiration;
     if (!expiration) {
       window.alert("Enter an expiration date (YYYY-MM-DD) first.");
@@ -971,8 +988,9 @@ function TradeTableRow(props: {
     }
   }
 
-  const showMarkWorthless = canMarkWorthlessExpiration(t);
+  const showMarkWorthless = canMarkWorthlessExpiration(t, allTrades);
   const worthlessPreview = computeWorthlessExpirationPnl(t);
+  const worthlessWarning = getWorthlessCloseWarning(t, allTrades);
 
   const net = computeNetAmount(t);
   const pnl = t.realizedPnl;
@@ -1281,6 +1299,11 @@ function TradeTableRow(props: {
                 {t.expiration}).
               </p>
             )}
+            {worthlessWarning ? (
+              <p className="mt-2 rounded-md border border-amber-300/60 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                {worthlessWarning}
+              </p>
+            ) : null}
             <div className="mt-3 flex gap-2">
               <button
                 type="button"

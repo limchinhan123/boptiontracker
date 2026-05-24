@@ -8,6 +8,16 @@ export type TradePremiumInput = {
   multiplier?: number;
 };
 
+export type WorthlessGuardTrade = TradePremiumInput & {
+  _id?: string;
+  underlying?: string;
+  strike?: number;
+  expiration?: string;
+  optionType?: "call" | "put" | "unknown";
+  realizedPnl?: number | null;
+  side?: string;
+};
+
 export function isOpenSide(side?: string): boolean {
   return (side ?? "").toUpperCase().includes("OPEN");
 }
@@ -20,6 +30,40 @@ export function isShortOpen(side?: string): boolean {
 export function isLongOpen(side?: string): boolean {
   const s = (side ?? "").toUpperCase();
   return s.includes("BUY") && s.includes("OPEN");
+}
+
+/** Close leg for an open short: BUY / BUY TO CLOSE. For open long: SELL / SELL TO CLOSE. */
+export function isCloseSideForOpen(
+  openSide?: string,
+  closeSide?: string,
+): boolean {
+  const open = (openSide ?? "").toUpperCase();
+  const close = (closeSide ?? "").toUpperCase();
+  if (close.includes("OPEN")) return false;
+
+  if (open.includes("SELL")) {
+    if (close.includes("BUY")) return true;
+    return false;
+  }
+  if (open.includes("BUY")) {
+    if (close.includes("SELL")) return true;
+    return false;
+  }
+  return false;
+}
+
+function normalizeUnderlying(u?: string): string {
+  return (u ?? "").trim().toUpperCase();
+}
+
+/** Strict contract identity for open/close pairing. */
+export function strictContractKey(
+  t: Pick<WorthlessGuardTrade, "underlying" | "strike" | "expiration" | "optionType">,
+): string | null {
+  if (!t.underlying || t.strike == null || !t.expiration) return null;
+  const ot =
+    t.optionType && t.optionType !== "unknown" ? t.optionType : "";
+  return `${normalizeUnderlying(t.underlying)}|${t.strike}|${t.expiration}|${ot}`;
 }
 
 /** Premium before fees: IBKR total if present, else qty × price × multiplier. */
@@ -68,16 +112,97 @@ export function expirationToPnlDate(expiration: string): number | null {
   return ts;
 }
 
+/** True when the calendar date is strictly after expiration (UTC). */
+export function isExpirationPast(
+  expiration: string,
+  nowMs: number = Date.now(),
+): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(expiration.trim());
+  if (!m) return false;
+  const today = new Date(nowMs).toISOString().slice(0, 10);
+  return today > expiration.trim();
+}
+
 export function hasUnsetRealizedPnl(realizedPnl?: number | null): boolean {
   return realizedPnl == null || realizedPnl === 0;
 }
 
+export function hasStrictCloseMatch(
+  open: WorthlessGuardTrade,
+  allTrades: WorthlessGuardTrade[],
+): boolean {
+  const openKey = strictContractKey(open);
+  if (!openKey) return false;
+  return allTrades.some((row) => {
+    if (row._id && open._id && row._id === open._id) return false;
+    if (!isCloseSideForOpen(open.side, row.side)) return false;
+    return strictContractKey(row) === openKey;
+  });
+}
+
+/** Partial contract overlap — close row may be missing strike or expiration from OCR. */
+export function findFuzzyCloseMatches(
+  open: WorthlessGuardTrade,
+  allTrades: WorthlessGuardTrade[],
+): WorthlessGuardTrade[] {
+  if (hasStrictCloseMatch(open, allTrades)) return [];
+  const openU = normalizeUnderlying(open.underlying);
+  if (!openU) return [];
+
+  return allTrades.filter((row) => {
+    if (row._id && open._id && row._id === open._id) return false;
+    if (!isCloseSideForOpen(open.side, row.side)) return false;
+    if (normalizeUnderlying(row.underlying) !== openU) return false;
+
+    const strikeMatch =
+      open.strike != null &&
+      row.strike != null &&
+      open.strike === row.strike;
+    const expMatch =
+      !!open.expiration &&
+      !!row.expiration &&
+      open.expiration === row.expiration;
+
+    if (strictContractKey(open) && strictContractKey(row)) {
+      if (strictContractKey(open) === strictContractKey(row)) return false;
+    }
+
+    return strikeMatch || expMatch;
+  });
+}
+
+function formatCloseLabel(t: WorthlessGuardTrade): string {
+  const parts = [
+    t.underlying?.toUpperCase(),
+    t.strike != null ? String(t.strike) : null,
+    t.expiration,
+    t.side,
+  ].filter(Boolean);
+  return parts.join(" ");
+}
+
+export function getWorthlessCloseWarning(
+  open: WorthlessGuardTrade,
+  allTrades: WorthlessGuardTrade[],
+): string | null {
+  if (hasStrictCloseMatch(open, allTrades)) return null;
+  const fuzzy = findFuzzyCloseMatches(open, allTrades);
+  if (fuzzy.length === 0) return null;
+  const labels = fuzzy.slice(0, 3).map(formatCloseLabel).join("; ");
+  return `A possible close trade exists (${labels}). If you already closed this position, cancel — marking worthless will double-count P&L.`;
+}
+
 export function canMarkWorthlessExpiration(
-  t: TradePremiumInput & { realizedPnl?: number | null; side?: string },
+  t: WorthlessGuardTrade,
+  allTrades: WorthlessGuardTrade[] = [],
+  nowMs: number = Date.now(),
 ): boolean {
   if (!isOpenSide(t.side)) return false;
   if (!hasUnsetRealizedPnl(t.realizedPnl)) return false;
-  return computeWorthlessExpirationPnl(t) != null;
+  if (computeWorthlessExpirationPnl(t) == null) return false;
+  if (!t.expiration || !isExpirationPast(t.expiration, nowMs)) return false;
+  if (hasStrictCloseMatch(t, allTrades)) return false;
+  return true;
 }
 
 const WORTHLESS_NOTE = "Expired worthless — no IBKR fill";
