@@ -1376,7 +1376,7 @@ function WeeklyCoachSection(props: {
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-start justify-between gap-2 p-4 text-left lg:pointer-events-none"
+        className="flex w-full items-start justify-between gap-2 p-4 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
       >
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
@@ -1384,19 +1384,19 @@ function WeeklyCoachSection(props: {
           </h2>
           <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
             {review
-              ? `Latest review · week ending ${review.weekEnding}`
-              : "Margin & concentration review — tap to expand."}
+              ? `Latest review · week ending ${review.weekEnding} · click to ${open ? "collapse" : "expand"}`
+              : `Margin & concentration review · click to ${open ? "collapse" : "expand"}`}
           </p>
         </div>
         <span
-          className="mt-0.5 shrink-0 text-xs text-zinc-400 lg:hidden"
+          className="mt-0.5 shrink-0 text-xs text-zinc-400"
           aria-hidden
         >
           {open ? "▲" : "▼"}
         </span>
       </button>
 
-      <div className={`px-4 pb-4 ${open ? "block" : "hidden"} lg:block`}>
+      <div className={`px-4 pb-4 ${open ? "block" : "hidden"}`}>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           Risk review from trades + account snapshots. Coach logic v
           {COACH_LOGIC_VERSION}.{" "}
