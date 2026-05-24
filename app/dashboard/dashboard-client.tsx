@@ -16,6 +16,12 @@ import {
   isOpenSide,
 } from "@/lib/worthless-pnl";
 import { isStaleCoachText } from "@/lib/coach-payload";
+import {
+  computeCoachHealth,
+  openQuestionInNarrative,
+  type CoachHealth,
+} from "@/lib/coach-health";
+import { COACH_LOGIC_VERSION, DEFAULT_COACH_PROFILE } from "@/lib/coach-version";
 
 const DashboardCharts = dynamic(() => import("./dashboard-charts"), {
   ssr: false,
@@ -320,9 +326,10 @@ type WeeklyReviewRow = {
   memoryMarkdown: string;
   model: string;
   openQuestion?: string;
+  coachLogicVersion?: number;
 };
 
-export type { LatestSnapshots, AccountSnapshotRow, WeeklyReviewRow };
+export type { LatestSnapshots, AccountSnapshotRow, WeeklyReviewRow, CoachHealth };
 
 function formatMonthKey(ym: string): string {
   const [y, m] = ym.split("-");
@@ -437,7 +444,13 @@ export default function DashboardClient({
     initialSnapshots,
   );
   const [review, setReview] = useState<WeeklyReviewRow | null>(initialReview);
+  const [coachHealth, setCoachHealth] = useState<CoachHealth | null>(null);
+  const [profileNotes, setProfileNotes] = useState(DEFAULT_COACH_PROFILE);
+  const [profileDirty, setProfileDirty] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [archivedReviewCount, setArchivedReviewCount] = useState(0);
   const [generatingReview, setGeneratingReview] = useState(false);
+  const [coachBusy, setCoachBusy] = useState(false);
   const [underlying, setUnderlying] = useState("");
   const [needsReviewOnly, setNeedsReviewOnly] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -503,11 +516,22 @@ export default function DashboardClient({
         };
       }
       let latestReview: WeeklyReviewRow | null = null;
+      let health: CoachHealth | null = null;
+      let latestProfile = DEFAULT_COACH_PROFILE;
+      let archivedCount = 0;
       if (reviewRes.ok) {
         const reviewRaw = (await reviewRes.json()) as {
           review?: WeeklyReviewRow | null;
+          health?: CoachHealth | null;
+          profileNotes?: string;
+          archivedReviewCount?: number;
         };
         latestReview = reviewRaw.review ?? null;
+        health = reviewRaw.health ?? null;
+        if (typeof reviewRaw.profileNotes === "string") {
+          latestProfile = reviewRaw.profileNotes;
+        }
+        archivedCount = Number(reviewRaw.archivedReviewCount) || 0;
       }
       return {
         ok: true as const,
@@ -515,6 +539,9 @@ export default function DashboardClient({
         stats,
         snapshots: latestSnapshots,
         review: latestReview,
+        coachHealth: health,
+        profileNotes: latestProfile,
+        archivedReviewCount: archivedCount,
       };
     } catch (e) {
       const message =
@@ -540,12 +567,15 @@ export default function DashboardClient({
       setStats(result.stats);
       setSnapshots(result.snapshots);
       setReview(result.review);
+      setCoachHealth(result.coachHealth);
+      setArchivedReviewCount(result.archivedReviewCount);
+      if (!profileDirty) setProfileNotes(result.profileNotes);
       setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [load]);
+  }, [load, profileDirty]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -557,13 +587,123 @@ export default function DashboardClient({
           setStats(result.stats);
           if ("snapshots" in result) setSnapshots(result.snapshots);
           if ("review" in result) setReview(result.review);
+          if ("coachHealth" in result) setCoachHealth(result.coachHealth);
+          if ("archivedReviewCount" in result) {
+            setArchivedReviewCount(result.archivedReviewCount);
+          }
+          if ("profileNotes" in result && !profileDirty) {
+            setProfileNotes(result.profileNotes);
+          }
         } catch {
           /* ignore background refresh errors */
         }
       })();
     }, 5000);
     return () => clearInterval(id);
-  }, [load]);
+  }, [load, profileDirty]);
+
+  async function refreshCoachFromLatest() {
+    const res = await fetch("/api/dashboard/reviews/latest", {
+      credentials: "include",
+    });
+    if (!res.ok) return;
+    const data = (await res.json()) as {
+      review?: WeeklyReviewRow | null;
+      health?: CoachHealth | null;
+      profileNotes?: string;
+      archivedReviewCount?: number;
+    };
+    if (data.review !== undefined) setReview(data.review);
+    if (data.health !== undefined) setCoachHealth(data.health);
+    if (typeof data.archivedReviewCount === "number") {
+      setArchivedReviewCount(data.archivedReviewCount);
+    }
+    if (typeof data.profileNotes === "string" && !profileDirty) {
+      setProfileNotes(data.profileNotes);
+    }
+  }
+
+  async function saveCoachProfile() {
+    setSavingProfile(true);
+    try {
+      const res = await fetch("/api/dashboard/coach/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ profileNotes }),
+      });
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Save failed");
+      setProfileDirty(false);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function archiveAndContinue(generateAfter: boolean) {
+    const msg = generateAfter
+      ? "Archive all current reviews (kept for download, excluded from coach memory) and generate a fresh review?"
+      : "Archive all current reviews? They stay downloadable but won't feed the next coach run.";
+    if (!window.confirm(msg)) return;
+    setCoachBusy(true);
+    try {
+      const url = generateAfter
+        ? "/api/dashboard/reviews/archive?generate=1"
+        : "/api/dashboard/reviews/archive";
+      const res = await fetch(url, { method: "POST", credentials: "include" });
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const data = (await res.json()) as {
+        error?: string;
+        review?: WeeklyReviewRow;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Archive failed");
+      if (data.review) setReview(data.review);
+      await refreshCoachFromLatest();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Archive failed");
+    } finally {
+      setCoachBusy(false);
+    }
+  }
+
+  async function startFreshCoach() {
+    if (
+      !window.confirm(
+        "Delete ALL coach reviews and memory? This cannot be undone. Use Archive & continue unless you hit a bad bug.",
+      )
+    ) {
+      return;
+    }
+    setCoachBusy(true);
+    try {
+      const res = await fetch("/api/dashboard/reviews/reset", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Reset failed");
+      setReview(null);
+      setCoachHealth(null);
+      await refreshCoachFromLatest();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Reset failed");
+    } finally {
+      setCoachBusy(false);
+    }
+  }
 
   const monthChartData = useMemo(() => {
     if (!stats?.byMonth?.length) return [];
@@ -664,6 +804,7 @@ export default function DashboardClient({
         throw new Error(data.error ?? "Generate failed");
       }
       if (data.review) setReview(data.review);
+      await refreshCoachFromLatest();
     } catch (e) {
       window.alert(e instanceof Error ? e.message : "Generate failed");
     } finally {
@@ -776,8 +917,21 @@ export default function DashboardClient({
 
       <WeeklyCoachSection
         review={review}
+        health={coachHealth}
+        profileNotes={profileNotes}
+        profileDirty={profileDirty}
+        savingProfile={savingProfile}
+        archivedReviewCount={archivedReviewCount}
         generating={generatingReview}
+        coachBusy={coachBusy}
+        onProfileChange={(notes) => {
+          setProfileNotes(notes);
+          setProfileDirty(true);
+        }}
+        onSaveProfile={() => void saveCoachProfile()}
         onGenerate={() => void generateReview()}
+        onArchiveAndContinue={(gen) => void archiveAndContinue(gen)}
+        onStartFresh={() => void startFreshCoach()}
         onDownloadFull={() => downloadReview("full")}
         onDownloadMemory={() => downloadReview("memory")}
       />
@@ -1149,17 +1303,45 @@ function AccountSnapshotsSection(props: {
 
 function WeeklyCoachSection(props: {
   review: WeeklyReviewRow | null;
+  health: CoachHealth | null;
+  profileNotes: string;
+  profileDirty: boolean;
+  savingProfile: boolean;
+  archivedReviewCount: number;
   generating: boolean;
+  coachBusy: boolean;
+  onProfileChange: (notes: string) => void;
+  onSaveProfile: () => void;
   onGenerate: () => void;
+  onArchiveAndContinue: (generateAfter: boolean) => void;
+  onStartFresh: () => void;
   onDownloadFull: () => void;
   onDownloadMemory: () => void;
 }) {
-  const { review, generating, onGenerate, onDownloadFull, onDownloadMemory } =
-    props;
+  const {
+    review,
+    health,
+    profileNotes,
+    profileDirty,
+    savingProfile,
+    archivedReviewCount,
+    generating,
+    coachBusy,
+    onProfileChange,
+    onSaveProfile,
+    onGenerate,
+    onArchiveAndContinue,
+    onStartFresh,
+    onDownloadFull,
+    onDownloadMemory,
+  } = props;
   const [open, setOpen] = useState(false);
   const stale = review
     ? isStaleCoachText(review.narrativeMarkdown + review.memoryMarkdown)
     : false;
+  const showOpenQuestionFooter =
+    review?.openQuestion &&
+    !openQuestionInNarrative(review.narrativeMarkdown, review.openQuestion);
 
   function fmtWhen(ts: number) {
     return new Date(ts).toLocaleString(undefined, {
@@ -1170,6 +1352,23 @@ function WeeklyCoachSection(props: {
       minute: "2-digit",
     });
   }
+
+  function healthStyles(status: CoachHealth["status"] | undefined) {
+    switch (status) {
+      case "ok":
+        return "border-emerald-300/60 bg-emerald-50 text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/30 dark:text-emerald-200";
+      case "regenerate_suggested":
+        return "border-sky-300/60 bg-sky-50 text-sky-900 dark:border-sky-800/60 dark:bg-sky-950/30 dark:text-sky-200";
+      case "stale_pattern":
+        return "border-amber-300/60 bg-amber-50 text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200";
+      case "generic_memory":
+        return "border-orange-300/60 bg-orange-50 text-orange-900 dark:border-orange-800/60 dark:bg-orange-950/30 dark:text-orange-200";
+      default:
+        return "border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300";
+    }
+  }
+
+  const busy = generating || coachBusy;
 
   return (
     <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
@@ -1199,7 +1398,8 @@ function WeeklyCoachSection(props: {
 
       <div className={`px-4 pb-4 ${open ? "block" : "hidden"} lg:block`}>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Risk review from trades + account snapshots.{" "}
+          Risk review from trades + account snapshots. Coach logic v
+          {COACH_LOGIC_VERSION}.{" "}
           <span className="font-medium text-zinc-600 dark:text-zinc-300">
             Full review
           </span>{" "}
@@ -1207,13 +1407,59 @@ function WeeklyCoachSection(props: {
           <span className="font-medium text-zinc-600 dark:text-zinc-300">
             Coach memory
           </span>{" "}
-          = bullets only for another LLM.
+          = bullets for the next run.
         </p>
+
+        {health ? (
+          <div
+            className={`mt-3 rounded-lg border px-3 py-2 text-xs ${healthStyles(health.status)}`}
+          >
+            <p className="font-medium">{health.label}</p>
+            <p className="mt-1 opacity-90">
+              Review v{health.reviewLogicVersion ?? "—"} · app v
+              {health.coachLogicVersion} · {health.memoryBulletCount} memory
+              bullets
+              {health.genericBulletCount > 0
+                ? ` (${health.genericBulletCount} generic)`
+                : ""}
+              {archivedReviewCount > 0
+                ? ` · ${archivedReviewCount} archived`
+                : ""}
+            </p>
+          </div>
+        ) : null}
+
+        <div className="mt-3">
+          <label
+            htmlFor="coach-profile"
+            className="text-xs font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Coach profile
+          </label>
+          <textarea
+            id="coach-profile"
+            rows={3}
+            value={profileNotes}
+            onChange={(e) => onProfileChange(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-200"
+            placeholder="How should the coach interpret your portfolio?"
+          />
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!profileDirty || savingProfile}
+              onClick={onSaveProfile}
+              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-800 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-200"
+            >
+              {savingProfile ? "Saving…" : "Save profile"}
+            </button>
+          </div>
+        </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
-            disabled={generating}
+            disabled={busy}
             onClick={onGenerate}
             className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm text-white disabled:opacity-60 dark:bg-emerald-600"
           >
@@ -1243,14 +1489,30 @@ function WeeklyCoachSection(props: {
               </button>
             </>
           ) : null}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onArchiveAndContinue(true)}
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-800 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-200"
+          >
+            Archive &amp; continue
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onStartFresh}
+            className="rounded-lg border border-red-300 px-3 py-1.5 text-sm text-red-800 disabled:opacity-50 dark:border-red-800 dark:text-red-300"
+          >
+            Start fresh
+          </button>
         </div>
 
-        {stale ? (
+        {stale || health?.status === "stale_pattern" ? (
           <p className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
             This review uses outdated metrics (e.g. open-leg or unrealized
             P&amp;L warnings). Tap{" "}
-            <span className="font-medium">Regenerate review</span> for a
-            corrected coach run.
+            <span className="font-medium">Regenerate review</span> — no wipe
+            needed unless memory is badly poisoned.
           </p>
         ) : null}
 
@@ -1259,11 +1521,14 @@ function WeeklyCoachSection(props: {
             <p className="text-xs text-zinc-500">
               Week ending {review.weekEnding} · {fmtWhen(review.generatedAt)} ·{" "}
               {review.model}
+              {review.coachLogicVersion != null
+                ? ` · coach v${review.coachLogicVersion}`
+                : ""}
             </p>
             <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm leading-relaxed whitespace-pre-wrap text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">
               {review.narrativeMarkdown}
             </div>
-            {review.openQuestion ? (
+            {showOpenQuestionFooter ? (
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
                 <span className="font-medium text-zinc-800 dark:text-zinc-200">
                   Open question:

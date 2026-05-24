@@ -74,10 +74,12 @@ export async function GET(request: Request) {
           topUnderlyingsByCount: [],
           topUnderlyingsByPnl: [],
           lastThreeMonths: [],
+          optionRealizedPnl: 0,
         },
         concentration: { topPositionSymbols: [] },
         flags: [],
         priorMemory: [],
+        weekOverWeek: null,
       };
     }
 

@@ -99,6 +99,7 @@ export type WeeklyFactSheet = {
     topUnderlyingsByCount: { underlying: string; count: number }[];
     topUnderlyingsByPnl: { underlying: string; pnl: number }[];
     lastThreeMonths: { month: string; count: number; pnl: number }[];
+    optionRealizedPnl: number;
   };
   concentration: {
     topPositionSymbols: Array<{
@@ -109,7 +110,55 @@ export type WeeklyFactSheet = {
   };
   flags: FactSheetFlag[];
   priorMemory: PriorReviewSlice[];
+  weekOverWeek: {
+    priorWeekEnding: string | null;
+    netLiquidationDelta: number | null;
+    excessLiqPctDelta: number | null;
+    initMarginPctDelta: number | null;
+    topSymbol: string | null;
+    topSymbolPctDelta: number | null;
+  } | null;
 };
+
+function sumOptionRealizedPnl(trades: TradeSlice[]): number {
+  return trades
+    .filter((t) => t.optionType === "call" || t.optionType === "put")
+    .reduce((s, t) => s + (t.realizedPnl ?? 0), 0);
+}
+
+function computeWeekOverWeek(
+  current: Pick<WeeklyFactSheet, "account" | "concentration" | "weekEnding">,
+  prior: WeeklyFactSheet | null,
+): WeeklyFactSheet["weekOverWeek"] {
+  if (!prior) return null;
+  const top = current.concentration.topPositionSymbols[0];
+  const priorTop = prior.concentration.topPositionSymbols[0];
+  return {
+    priorWeekEnding: prior.weekEnding,
+    netLiquidationDelta:
+      current.account.netLiquidation != null &&
+      prior.account.netLiquidation != null
+        ? current.account.netLiquidation - prior.account.netLiquidation
+        : null,
+    excessLiqPctDelta:
+      current.account.excessLiqPctOfNetLiq != null &&
+      prior.account.excessLiqPctOfNetLiq != null
+        ? current.account.excessLiqPctOfNetLiq -
+          prior.account.excessLiqPctOfNetLiq
+        : null,
+    initMarginPctDelta:
+      current.account.initMarginPctOfNetLiq != null &&
+      prior.account.initMarginPctOfNetLiq != null
+        ? current.account.initMarginPctOfNetLiq -
+          prior.account.initMarginPctOfNetLiq
+        : null,
+    topSymbol: top?.symbol ?? null,
+    topSymbolPctDelta:
+      top?.pctNetLiq != null && priorTop?.pctNetLiq != null
+        ? top.pctNetLiq - priorTop.pctNetLiq
+        : null,
+  };
+}
 
 function pct(n: number | null | undefined, d: number | null | undefined): number | null {
   if (n == null || d == null || d === 0) return null;
@@ -272,6 +321,7 @@ export function buildWeeklyFactSheet(args: {
   balance?: SnapshotSlice | null;
   position?: SnapshotSlice | null;
   priorReviews?: PriorReviewSlice[];
+  priorFactSheet?: WeeklyFactSheet | null;
   now?: number;
 }): WeeklyFactSheet {
   const now = args.now ?? Date.now();
@@ -319,8 +369,9 @@ export function buildWeeklyFactSheet(args: {
   });
 
   const lastThreeMonths = args.stats.byMonth.slice(-3);
+  const optionRealizedPnl = sumOptionRealizedPnl(args.trades);
 
-  return {
+  const sheet: WeeklyFactSheet = {
     generatedAt: now,
     weekEnding,
     context: {
@@ -360,9 +411,14 @@ export function buildWeeklyFactSheet(args: {
         .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl))
         .slice(0, 6),
       lastThreeMonths,
+      optionRealizedPnl,
     },
     concentration: { topPositionSymbols },
     flags,
     priorMemory: (args.priorReviews ?? []).slice(0, 4),
+    weekOverWeek: null,
   };
+
+  sheet.weekOverWeek = computeWeekOverWeek(sheet, args.priorFactSheet ?? null);
+  return sheet;
 }

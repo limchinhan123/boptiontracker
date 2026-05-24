@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as coachSettings from "../coachSettings.js";
 import type * as generateWeeklyReview from "../generateWeeklyReview.js";
 import type * as ingest from "../ingest.js";
 import type * as snapshots from "../snapshots.js";
@@ -21,6 +22,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  coachSettings: typeof coachSettings;
   generateWeeklyReview: typeof generateWeeklyReview;
   ingest: typeof ingest;
   snapshots: typeof snapshots;

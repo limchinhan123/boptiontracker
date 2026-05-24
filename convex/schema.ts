@@ -104,7 +104,17 @@ export default defineSchema({
     memoryMarkdown: v.string(),
     model: v.string(),
     openQuestion: v.optional(v.string()),
+    coachLogicVersion: v.optional(v.number()),
+    archived: v.optional(v.boolean()),
+    archivedAt: v.optional(v.number()),
   })
     .index("by_week_ending", ["weekEnding"])
-    .index("by_generated", ["generatedAt"]),
+    .index("by_generated", ["generatedAt"])
+    .index("by_archived_generated", ["archived", "generatedAt"]),
+
+  coachSettings: defineTable({
+    key: v.literal("default"),
+    profileNotes: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
 });

@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { computeCoachHealth } from "@/lib/coach-health";
+import { COACH_LOGIC_VERSION } from "@/lib/coach-version";
 import { api, getConvexClient, requireDashboardSecret } from "@/lib/convex-server";
 import { cookieName, verifySessionCookie } from "@/lib/session";
 
@@ -13,10 +15,29 @@ export async function GET() {
 
   try {
     const client = getConvexClient();
-    const review = await client.query(api.weeklyReviews.latest, {
-      dashboardSecret: requireDashboardSecret(),
+    const secret = requireDashboardSecret();
+    const [review, archivedReviewCount, profile] = await Promise.all([
+      client.query(api.weeklyReviews.latest, { dashboardSecret: secret }),
+      client.query(api.weeklyReviews.countArchived, { dashboardSecret: secret }),
+      client.query(api.coachSettings.getProfile, { dashboardSecret: secret }),
+    ]);
+
+    const health = review
+      ? computeCoachHealth({
+          narrativeMarkdown: review.narrativeMarkdown,
+          memoryMarkdown: review.memoryMarkdown,
+          reviewLogicVersion: review.coachLogicVersion ?? null,
+          archivedReviewCount,
+        })
+      : null;
+
+    return NextResponse.json({
+      review,
+      health,
+      profileNotes: profile.profileNotes,
+      coachLogicVersion: COACH_LOGIC_VERSION,
+      archivedReviewCount,
     });
-    return NextResponse.json({ review });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Convex request failed";
     return NextResponse.json({ error: message }, { status: 502 });
