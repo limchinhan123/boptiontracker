@@ -577,31 +577,6 @@ export default function DashboardClient({
     };
   }, [load, profileDirty]);
 
-  useEffect(() => {
-    const id = setInterval(() => {
-      void (async () => {
-        try {
-          const result = await load();
-          if (!result.ok || !("trades" in result)) return;
-          setTrades(result.trades);
-          setStats(result.stats);
-          if ("snapshots" in result) setSnapshots(result.snapshots);
-          if ("review" in result) setReview(result.review);
-          if ("coachHealth" in result) setCoachHealth(result.coachHealth);
-          if ("archivedReviewCount" in result) {
-            setArchivedReviewCount(result.archivedReviewCount);
-          }
-          if ("profileNotes" in result && !profileDirty) {
-            setProfileNotes(result.profileNotes);
-          }
-        } catch {
-          /* ignore background refresh errors */
-        }
-      })();
-    }, 5000);
-    return () => clearInterval(id);
-  }, [load, profileDirty]);
-
   async function refreshCoachFromLatest() {
     const res = await fetch("/api/dashboard/reviews/latest", {
       credentials: "include",
@@ -863,36 +838,9 @@ export default function DashboardClient({
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            Options trades
-          </h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Live view (refreshes every 5s). Trades are oldest → newest; set{" "}
-            <span className="font-medium text-zinc-600 dark:text-zinc-300">
-              P&amp;L
-            </span>{" "}
-            per row in Edit, or use{" "}
-            <span className="font-medium text-zinc-600 dark:text-zinc-300">
-              Mark expired worthless
-            </span>{" "}
-            on open legs. Sort columns to reorder; cumulative P&amp;L updates in
-            that order. Use{" "}
-            <span className="font-medium text-zinc-600 dark:text-zinc-300">
-              Download Excel
-            </span>{" "}
-            to export (respects filters; up to 500 rows). Telegram: trade
-            screenshots with no caption; IBKR account screenshots with caption{" "}
-            <span className="font-medium text-zinc-600 dark:text-zinc-300">
-              balance
-            </span>{" "}
-            or{" "}
-            <span className="font-medium text-zinc-600 dark:text-zinc-300">
-              position
-            </span>{" "}
-            (any capitalization).
-          </p>
-        </div>
+        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+          Options trades
+        </h1>
         <Link
           href="/"
           className="text-sm text-emerald-700 hover:underline dark:text-emerald-400"
