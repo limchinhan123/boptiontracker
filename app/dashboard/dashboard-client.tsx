@@ -10,6 +10,7 @@ import {
   computeWorthlessExpirationPnl,
   expirationToPnlDate,
   getWorthlessCloseWarning,
+  hasCloseMatchForHide,
   hasStrictCloseMatch,
   hasUnsetRealizedPnl,
   isOpenSide,
@@ -936,9 +937,9 @@ function TradeTableRow(props: {
   }
 
   async function confirmMarkWorthless() {
-    if (hasStrictCloseMatch(t, allTrades)) {
+    if (hasCloseMatchForHide(t, allTrades)) {
       window.alert(
-        "A matching BUY TO CLOSE row exists for this contract. P&L is already on the close row — do not mark worthless here.",
+        "A matching close row exists for this contract (same strike). P&L is on the close row — do not mark worthless here.",
       );
       return;
     }
