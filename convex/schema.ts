@@ -95,4 +95,16 @@ export default defineSchema({
     .index("by_created", ["createdAt"])
     .index("by_kind_created", ["kind", "createdAt"])
     .index("by_source_message", ["source", "messageId"]),
+
+  weeklyReviews: defineTable({
+    weekEnding: v.string(),
+    generatedAt: v.number(),
+    factSheetJson: v.string(),
+    narrativeMarkdown: v.string(),
+    memoryMarkdown: v.string(),
+    model: v.string(),
+    openQuestion: v.optional(v.string()),
+  })
+    .index("by_week_ending", ["weekEnding"])
+    .index("by_generated", ["generatedAt"]),
 });

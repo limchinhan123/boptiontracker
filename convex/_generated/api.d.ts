@@ -8,9 +8,11 @@
  * @module
  */
 
+import type * as generateWeeklyReview from "../generateWeeklyReview.js";
 import type * as ingest from "../ingest.js";
 import type * as snapshots from "../snapshots.js";
 import type * as trades from "../trades.js";
+import type * as weeklyReviews from "../weeklyReviews.js";
 
 import type {
   ApiFromModules,
@@ -19,9 +21,11 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  generateWeeklyReview: typeof generateWeeklyReview;
   ingest: typeof ingest;
   snapshots: typeof snapshots;
   trades: typeof trades;
+  weeklyReviews: typeof weeklyReviews;
 }>;
 
 /**

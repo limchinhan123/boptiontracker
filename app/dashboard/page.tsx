@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import DashboardClientLoader from "./dashboard-client-loader";
-import type { LatestSnapshots } from "./dashboard-client";
+import type { LatestSnapshots, WeeklyReviewRow } from "./dashboard-client";
 import { api, getConvexClient, requireDashboardSecret } from "@/lib/convex-server";
 import { cookieName, verifySessionCookie } from "@/lib/session";
 
@@ -12,14 +12,25 @@ export default async function DashboardPage() {
   }
 
   let initialSnapshots: LatestSnapshots | null = null;
+  let initialReview: WeeklyReviewRow | null = null;
   try {
     const client = getConvexClient();
-    initialSnapshots = await client.query(api.snapshots.latestByKind, {
-      dashboardSecret: requireDashboardSecret(),
-    });
+    const secret = requireDashboardSecret();
+    const [snapshots, review] = await Promise.all([
+      client.query(api.snapshots.latestByKind, { dashboardSecret: secret }),
+      client.query(api.weeklyReviews.latest, { dashboardSecret: secret }),
+    ]);
+    initialSnapshots = snapshots;
+    initialReview = review;
   } catch {
     initialSnapshots = null;
+    initialReview = null;
   }
 
-  return <DashboardClientLoader initialSnapshots={initialSnapshots} />;
+  return (
+    <DashboardClientLoader
+      initialSnapshots={initialSnapshots}
+      initialReview={initialReview}
+    />
+  );
 }

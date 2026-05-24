@@ -311,7 +311,17 @@ type LatestSnapshots = {
   position: AccountSnapshotRow | null;
 };
 
-export type { LatestSnapshots, AccountSnapshotRow };
+type WeeklyReviewRow = {
+  _id: string;
+  weekEnding: string;
+  generatedAt: number;
+  narrativeMarkdown: string;
+  memoryMarkdown: string;
+  model: string;
+  openQuestion?: string;
+};
+
+export type { LatestSnapshots, AccountSnapshotRow, WeeklyReviewRow };
 
 function formatMonthKey(ym: string): string {
   const [y, m] = ym.split("-");
@@ -415,14 +425,18 @@ function SortTh({
 
 export default function DashboardClient({
   initialSnapshots = null,
+  initialReview = null,
 }: {
   initialSnapshots?: LatestSnapshots | null;
+  initialReview?: WeeklyReviewRow | null;
 }) {
   const [trades, setTrades] = useState<TradeRow[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [snapshots, setSnapshots] = useState<LatestSnapshots | null>(
     initialSnapshots,
   );
+  const [review, setReview] = useState<WeeklyReviewRow | null>(initialReview);
+  const [generatingReview, setGeneratingReview] = useState(false);
   const [underlying, setUnderlying] = useState("");
   const [needsReviewOnly, setNeedsReviewOnly] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -435,12 +449,18 @@ export default function DashboardClient({
       const params = new URLSearchParams();
       if (underlying.trim()) params.set("underlying", underlying.trim());
       if (needsReviewOnly) params.set("needsReview", "1");
-      const [tRes, sRes, snapRes] = await Promise.all([
+      const [tRes, sRes, snapRes, reviewRes] = await Promise.all([
         fetch(`/api/dashboard/trades?${params}`, { credentials: "include" }),
         fetch("/api/dashboard/stats", { credentials: "include" }),
         fetch("/api/dashboard/snapshots", { credentials: "include" }),
+        fetch("/api/dashboard/reviews/latest", { credentials: "include" }),
       ]);
-      if (tRes.status === 401 || sRes.status === 401 || snapRes.status === 401) {
+      if (
+        tRes.status === 401 ||
+        sRes.status === 401 ||
+        snapRes.status === 401 ||
+        reviewRes.status === 401
+      ) {
         window.location.href = "/login";
         return { ok: false as const };
       }
@@ -481,7 +501,20 @@ export default function DashboardClient({
           position: snapRaw.position ?? null,
         };
       }
-      return { ok: true as const, trades, stats, snapshots: latestSnapshots };
+      let latestReview: WeeklyReviewRow | null = null;
+      if (reviewRes.ok) {
+        const reviewRaw = (await reviewRes.json()) as {
+          review?: WeeklyReviewRow | null;
+        };
+        latestReview = reviewRaw.review ?? null;
+      }
+      return {
+        ok: true as const,
+        trades,
+        stats,
+        snapshots: latestSnapshots,
+        review: latestReview,
+      };
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Unexpected error loading dashboard";
@@ -505,6 +538,7 @@ export default function DashboardClient({
       setTrades(result.trades);
       setStats(result.stats);
       setSnapshots(result.snapshots);
+      setReview(result.review);
       setLoading(false);
     })();
     return () => {
@@ -521,6 +555,7 @@ export default function DashboardClient({
           setTrades(result.trades);
           setStats(result.stats);
           if ("snapshots" in result) setSnapshots(result.snapshots);
+          if ("review" in result) setReview(result.review);
         } catch {
           /* ignore background refresh errors */
         }
@@ -609,6 +644,40 @@ export default function DashboardClient({
     void load();
   }
 
+  async function generateReview() {
+    setGeneratingReview(true);
+    try {
+      const res = await fetch("/api/dashboard/reviews/generate", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const data = (await res.json()) as {
+        error?: string;
+        review?: WeeklyReviewRow;
+      };
+      if (!res.ok) {
+        throw new Error(data.error ?? "Generate failed");
+      }
+      if (data.review) setReview(data.review);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Generate failed");
+    } finally {
+      setGeneratingReview(false);
+    }
+  }
+
+  function downloadReview(kind: "full" | "memory") {
+    const url =
+      kind === "memory"
+        ? "/api/dashboard/reviews/export?kind=memory"
+        : "/api/dashboard/reviews/export";
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   async function clearAllTrades() {
     if (
       !window.confirm(
@@ -691,17 +760,26 @@ export default function DashboardClient({
       </header>
 
       {stats ? (
-        <section className="grid max-w-2xl gap-4 sm:grid-cols-2">
+        <section className="grid gap-4 lg:grid-cols-3">
           <StatCard label="Total trades" value={String(stats.totalTrades)} />
           <StatCard
             label="Total profit & loss"
             value={formatMoney(stats.totalRealizedPnl)}
             valueClassName={pnlClass(stats.totalRealizedPnl)}
           />
+          <AccountSnapshotsSection snapshots={snapshots} />
         </section>
-      ) : null}
+      ) : (
+        <AccountSnapshotsSection snapshots={snapshots} />
+      )}
 
-      <AccountSnapshotsSection snapshots={snapshots} />
+      <WeeklyCoachSection
+        review={review}
+        generating={generatingReview}
+        onGenerate={() => void generateReview()}
+        onDownloadFull={() => downloadReview("full")}
+        onDownloadMemory={() => downloadReview("memory")}
+      />
 
       {monthPnlRows.length > 0 ? (
         <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
@@ -917,20 +995,8 @@ function AccountSnapshotsSection(props: {
   snapshots: LatestSnapshots | null;
 }) {
   const { snapshots } = props;
-  if (!snapshots?.balance && !snapshots?.position) {
-    return (
-      <section className="rounded-xl border border-dashed border-zinc-300 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-          Account snapshots
-        </h2>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Send IBKR Balances screenshot to Telegram with caption{" "}
-          <span className="font-medium">balance</span>, then Portfolio →
-          Positions with caption <span className="font-medium">position</span>.
-        </p>
-      </section>
-    );
-  }
+  const [open, setOpen] = useState(false);
+  const hasData = Boolean(snapshots?.balance || snapshots?.position);
 
   function fmtSnap(n?: number, currency?: string) {
     if (n == null) return "—";
@@ -946,59 +1012,197 @@ function AccountSnapshotsSection(props: {
     });
   }
 
+  const body = !hasData ? (
+    <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+      Send IBKR Balances screenshot to Telegram with caption{" "}
+      <span className="font-medium">balance</span>, then Portfolio → Positions
+      with caption <span className="font-medium">position</span>.
+    </p>
+  ) : (
+    <div className="mt-2 space-y-2">
+      {snapshots?.balance ? (
+        <div className="rounded-lg border border-zinc-200 p-2.5 dark:border-zinc-700">
+          <p className="text-xs font-medium uppercase text-zinc-500">Balance</p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            {fmtWhen(snapshots.balance.createdAt)}
+            {snapshots.balance.needsReview ? " · needs review" : ""}
+          </p>
+          <p className="mt-1.5 text-sm leading-snug">
+            Net liq{" "}
+            {fmtSnap(
+              snapshots.balance.netLiquidation,
+              snapshots.balance.currency,
+            )}
+          </p>
+          <p className="text-sm leading-snug">
+            Excess liq{" "}
+            {fmtSnap(
+              snapshots.balance.excessLiquidity,
+              snapshots.balance.currency,
+            )}
+          </p>
+          <p className="text-sm leading-snug">
+            Init margin{" "}
+            {fmtSnap(
+              snapshots.balance.initialMargin,
+              snapshots.balance.currency,
+            )}
+          </p>
+        </div>
+      ) : null}
+      {snapshots?.position ? (
+        <div className="rounded-lg border border-zinc-200 p-2.5 dark:border-zinc-700">
+          <p className="text-xs font-medium uppercase text-zinc-500">Position</p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            {fmtWhen(snapshots.position.createdAt)}
+            {snapshots.position.needsReview ? " · needs review" : ""}
+          </p>
+          <p className="mt-1.5 text-sm leading-snug">
+            Unrealized{" "}
+            {fmtSnap(
+              snapshots.position.unrealizedPnl,
+              snapshots.position.currency,
+            )}
+          </p>
+          <p className="text-sm leading-snug">
+            Maint margin{" "}
+            {fmtSnap(
+              snapshots.position.maintenanceMargin,
+              snapshots.position.currency,
+            )}
+          </p>
+          <p className="text-sm leading-snug">
+            Positions tracked: {snapshots.position.positions?.length ?? 0}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+
+  return (
+    <div
+      className={`rounded-xl border bg-white dark:bg-zinc-900 ${
+        hasData
+          ? "border-zinc-200 dark:border-zinc-800"
+          : "border-dashed border-zinc-300 dark:border-zinc-700"
+      }`}
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-start justify-between gap-2 p-4 text-left lg:pointer-events-none"
+      >
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            Account snapshots
+          </h2>
+          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+            {hasData
+              ? "Latest Telegram uploads (caption balance / position)."
+              : "Optional — tap to set up."}
+          </p>
+        </div>
+        <span
+          className="mt-0.5 shrink-0 text-xs text-zinc-400 lg:hidden"
+          aria-hidden
+        >
+          {open ? "▲" : "▼"}
+        </span>
+      </button>
+      <div className={`px-4 pb-4 ${open ? "block" : "hidden"} lg:block`}>
+        {body}
+      </div>
+    </div>
+  );
+}
+
+function WeeklyCoachSection(props: {
+  review: WeeklyReviewRow | null;
+  generating: boolean;
+  onGenerate: () => void;
+  onDownloadFull: () => void;
+  onDownloadMemory: () => void;
+}) {
+  const { review, generating, onGenerate, onDownloadFull, onDownloadMemory } =
+    props;
+
+  function fmtWhen(ts: number) {
+    return new Date(ts).toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
   return (
     <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-        Account snapshots
-      </h2>
-      <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-        Latest Telegram uploads (caption balance / position).
-      </p>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        {snapshots.balance ? (
-          <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
-            <p className="text-xs font-medium uppercase text-zinc-500">Balance</p>
-            <p className="mt-1 text-xs text-zinc-500">
-              {fmtWhen(snapshots.balance.createdAt)}
-              {snapshots.balance.needsReview ? " · needs review" : ""}
-            </p>
-            <p className="mt-2 text-sm">
-              Net liq {fmtSnap(snapshots.balance.netLiquidation, snapshots.balance.currency)}
-            </p>
-            <p className="text-sm">
-              Excess liq{" "}
-              {fmtSnap(snapshots.balance.excessLiquidity, snapshots.balance.currency)}
-            </p>
-            <p className="text-sm">
-              Init margin{" "}
-              {fmtSnap(snapshots.balance.initialMargin, snapshots.balance.currency)}
-            </p>
-          </div>
-        ) : null}
-        {snapshots.position ? (
-          <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
-            <p className="text-xs font-medium uppercase text-zinc-500">Position</p>
-            <p className="mt-1 text-xs text-zinc-500">
-              {fmtWhen(snapshots.position.createdAt)}
-              {snapshots.position.needsReview ? " · needs review" : ""}
-            </p>
-            <p className="mt-2 text-sm">
-              Unrealized{" "}
-              {fmtSnap(snapshots.position.unrealizedPnl, snapshots.position.currency)}
-            </p>
-            <p className="text-sm">
-              Maint margin{" "}
-              {fmtSnap(
-                snapshots.position.maintenanceMargin,
-                snapshots.position.currency,
-              )}
-            </p>
-            <p className="text-sm">
-              Positions tracked: {snapshots.position.positions?.length ?? 0}
-            </p>
-          </div>
-        ) : null}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            Weekly coach
+          </h2>
+          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+            Risk review from trades + account snapshots. Memory is saved for the
+            next run and exportable as Markdown.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={generating}
+            onClick={onGenerate}
+            className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm text-white disabled:opacity-60 dark:bg-emerald-600"
+          >
+            {generating ? "Generating…" : review ? "Regenerate review" : "Generate review"}
+          </button>
+          {review ? (
+            <>
+              <button
+                type="button"
+                onClick={onDownloadFull}
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-800 dark:border-zinc-600 dark:text-zinc-200"
+              >
+                Download MD
+              </button>
+              <button
+                type="button"
+                onClick={onDownloadMemory}
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-800 dark:border-zinc-600 dark:text-zinc-200"
+              >
+                Memory MD
+              </button>
+            </>
+          ) : null}
+        </div>
       </div>
+
+      {review ? (
+        <div className="mt-4 space-y-3">
+          <p className="text-xs text-zinc-500">
+            Week ending {review.weekEnding} · {fmtWhen(review.generatedAt)} ·{" "}
+            {review.model}
+          </p>
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm leading-relaxed whitespace-pre-wrap text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">
+            {review.narrativeMarkdown}
+          </div>
+          {review.openQuestion ? (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              <span className="font-medium text-zinc-800 dark:text-zinc-200">
+                Open question:
+              </span>{" "}
+              {review.openQuestion}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+          No review yet. Upload balance + position snapshots via Telegram, then
+          click Generate review.
+        </p>
+      )}
     </section>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { LatestSnapshots } from "./dashboard-client";
+import type { LatestSnapshots, WeeklyReviewRow } from "./dashboard-client";
 
 const DashboardClient = dynamic(() => import("./dashboard-client"), {
   ssr: false,
@@ -14,8 +14,15 @@ const DashboardClient = dynamic(() => import("./dashboard-client"), {
 
 export default function DashboardClientLoader({
   initialSnapshots = null,
+  initialReview = null,
 }: {
   initialSnapshots?: LatestSnapshots | null;
+  initialReview?: WeeklyReviewRow | null;
 }) {
-  return <DashboardClient initialSnapshots={initialSnapshots} />;
+  return (
+    <DashboardClient
+      initialSnapshots={initialSnapshots}
+      initialReview={initialReview}
+    />
+  );
 }
