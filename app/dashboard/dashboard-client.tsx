@@ -311,6 +311,8 @@ type LatestSnapshots = {
   position: AccountSnapshotRow | null;
 };
 
+export type { LatestSnapshots, AccountSnapshotRow };
+
 function formatMonthKey(ym: string): string {
   const [y, m] = ym.split("-");
   if (!y || !m) return ym;
@@ -411,10 +413,16 @@ function SortTh({
   );
 }
 
-export default function DashboardClient() {
+export default function DashboardClient({
+  initialSnapshots = null,
+}: {
+  initialSnapshots?: LatestSnapshots | null;
+}) {
   const [trades, setTrades] = useState<TradeRow[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [snapshots, setSnapshots] = useState<LatestSnapshots | null>(null);
+  const [snapshots, setSnapshots] = useState<LatestSnapshots | null>(
+    initialSnapshots,
+  );
   const [underlying, setUnderlying] = useState("");
   const [needsReviewOnly, setNeedsReviewOnly] = useState(false);
   const [loading, setLoading] = useState(true);
