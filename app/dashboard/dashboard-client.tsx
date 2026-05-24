@@ -22,6 +22,7 @@ import {
   type CoachHealth,
 } from "@/lib/coach-health";
 import { COACH_LOGIC_VERSION, DEFAULT_COACH_PROFILE } from "@/lib/coach-version";
+import { useDashboardLiveSync } from "./use-dashboard-live-sync";
 
 const DashboardCharts = dynamic(() => import("./dashboard-charts"), {
   ssr: false,
@@ -549,6 +550,28 @@ export default function DashboardClient({
       return { ok: false as const, error: message };
     }
   }, [underlying, needsReviewOnly]);
+
+  const refreshDashboardData = useCallback(async () => {
+    const result = await load();
+    if (result.ok === false) {
+      if ("error" in result && result.error) {
+        setErr(result.error);
+      }
+      return;
+    }
+    setErr(null);
+    setTrades(result.trades);
+    setStats(result.stats);
+    setSnapshots(result.snapshots);
+    setReview(result.review);
+    setCoachHealth(result.coachHealth);
+    setArchivedReviewCount(result.archivedReviewCount);
+    if (!profileDirty) setProfileNotes(result.profileNotes);
+  }, [load, profileDirty]);
+
+  useDashboardLiveSync(() => {
+    void refreshDashboardData();
+  });
 
   useEffect(() => {
     let cancelled = false;

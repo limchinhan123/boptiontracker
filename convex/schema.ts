@@ -117,4 +117,11 @@ export default defineSchema({
     profileNotes: v.optional(v.string()),
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
+
+  /** Bumped when trades/snapshots change so the dashboard can live-sync. */
+  dashboardFeed: defineTable({
+    key: v.literal("default"),
+    version: v.number(),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
 });

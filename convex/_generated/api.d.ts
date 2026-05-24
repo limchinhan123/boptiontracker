@@ -9,6 +9,8 @@
  */
 
 import type * as coachSettings from "../coachSettings.js";
+import type * as dashboardAuth from "../dashboardAuth.js";
+import type * as dashboardFeed from "../dashboardFeed.js";
 import type * as generateWeeklyReview from "../generateWeeklyReview.js";
 import type * as ingest from "../ingest.js";
 import type * as snapshots from "../snapshots.js";
@@ -23,6 +25,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   coachSettings: typeof coachSettings;
+  dashboardAuth: typeof dashboardAuth;
+  dashboardFeed: typeof dashboardFeed;
   generateWeeklyReview: typeof generateWeeklyReview;
   ingest: typeof ingest;
   snapshots: typeof snapshots;

@@ -5,6 +5,7 @@ import {
   query,
 } from "./_generated/server";
 import { v } from "convex/values";
+import { bumpDashboardFeed } from "./dashboardFeed";
 
 const sourceV = v.union(
   v.literal("telegram"),
@@ -145,7 +146,7 @@ export const insertTradeLeg = internalMutation({
   },
   returns: v.id("trades"),
   handler: async (ctx, args) => {
-    return await ctx.db.insert("trades", {
+    const id = await ctx.db.insert("trades", {
       createdAt: args.createdAt,
       source: args.source,
       messageId: args.messageId,
@@ -170,6 +171,8 @@ export const insertTradeLeg = internalMutation({
       modelOutput: args.modelOutput,
       ingestError: args.ingestError,
     });
+    await bumpDashboardFeed(ctx);
+    return id;
   },
 });
 
@@ -305,6 +308,7 @@ export const deleteTrade = mutation({
   handler: async (ctx, args) => {
     assertDashboardSecret(args.dashboardSecret);
     await ctx.db.delete(args.tradeId);
+    await bumpDashboardFeed(ctx);
     return null;
   },
 });
@@ -323,6 +327,9 @@ export const clearAllTrades = mutation({
         await ctx.db.delete(row._id);
         deleted += 1;
       }
+    }
+    if (deleted > 0) {
+      await bumpDashboardFeed(ctx);
     }
     return deleted;
   },
@@ -357,6 +364,7 @@ export const updateTrade = mutation({
   handler: async (ctx, args) => {
     assertDashboardSecret(args.dashboardSecret);
     await ctx.db.patch(args.tradeId, args.patch);
+    await bumpDashboardFeed(ctx);
     return null;
   },
 });
@@ -404,7 +412,7 @@ export const createManualTrade = mutation({
     }
 
     const messageId = `manual:${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    return await ctx.db.insert("trades", {
+    const id = await ctx.db.insert("trades", {
       createdAt: Date.now(),
       source: "manual",
       messageId,
@@ -427,5 +435,7 @@ export const createManualTrade = mutation({
       realizedPnl,
       pnlDate,
     });
+    await bumpDashboardFeed(ctx);
+    return id;
   },
 });

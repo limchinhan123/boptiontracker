@@ -4,6 +4,7 @@ import {
   query,
 } from "./_generated/server";
 import { v } from "convex/values";
+import { bumpDashboardFeed } from "./dashboardFeed";
 
 const snapshotKindV = v.union(v.literal("balance"), v.literal("position"));
 
@@ -102,7 +103,9 @@ export const insertSnapshot = internalMutation({
   },
   returns: v.id("accountSnapshots"),
   handler: async (ctx, args) => {
-    return await ctx.db.insert("accountSnapshots", args);
+    const id = await ctx.db.insert("accountSnapshots", args);
+    await bumpDashboardFeed(ctx);
+    return id;
   },
 });
 

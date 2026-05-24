@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type { LatestSnapshots, WeeklyReviewRow } from "./dashboard-client";
+import { ConvexDashboardProvider } from "./convex-dashboard-provider";
 
 const DashboardClient = dynamic(() => import("./dashboard-client"), {
   ssr: false,
@@ -20,9 +21,11 @@ export default function DashboardClientLoader({
   initialReview?: WeeklyReviewRow | null;
 }) {
   return (
-    <DashboardClient
-      initialSnapshots={initialSnapshots}
-      initialReview={initialReview}
-    />
+    <ConvexDashboardProvider>
+      <DashboardClient
+        initialSnapshots={initialSnapshots}
+        initialReview={initialReview}
+      />
+    </ConvexDashboardProvider>
   );
 }
