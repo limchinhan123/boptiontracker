@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { internalMutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 
 const reviewDoc = v.object({
   _id: v.id("weeklyReviews"),
@@ -82,5 +82,19 @@ export const getById = query({
   handler: async (ctx, args) => {
     assertDashboardSecret(args.dashboardSecret);
     return await ctx.db.get(args.reviewId);
+  },
+});
+
+/** Delete all stored coach reviews and memory (dashboard admin). */
+export const resetAll = mutation({
+  args: { dashboardSecret: v.string() },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    assertDashboardSecret(args.dashboardSecret);
+    const all = await ctx.db.query("weeklyReviews").collect();
+    for (const row of all) {
+      await ctx.db.delete(row._id);
+    }
+    return all.length;
   },
 });
