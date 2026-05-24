@@ -760,14 +760,14 @@ export default function DashboardClient({
       </header>
 
       {stats ? (
-        <section className="grid gap-4 lg:grid-cols-3">
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:items-stretch">
           <StatCard label="Total trades" value={String(stats.totalTrades)} />
           <StatCard
             label="Total profit & loss"
             value={formatMoney(stats.totalRealizedPnl)}
             valueClassName={pnlClass(stats.totalRealizedPnl)}
           />
-          <AccountSnapshotsSection snapshots={snapshots} />
+          <AccountSnapshotsSection snapshots={snapshots} compact />
         </section>
       ) : (
         <AccountSnapshotsSection snapshots={snapshots} />
@@ -978,7 +978,7 @@ function StatCard({
   valueClassName?: string;
 }) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="flex h-full flex-col rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
       <p className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">
         {label}
       </p>
@@ -993,8 +993,9 @@ function StatCard({
 
 function AccountSnapshotsSection(props: {
   snapshots: LatestSnapshots | null;
+  compact?: boolean;
 }) {
-  const { snapshots } = props;
+  const { snapshots, compact = false } = props;
   const [open, setOpen] = useState(false);
   const hasData = Boolean(snapshots?.balance || snapshots?.position);
 
@@ -1018,6 +1019,32 @@ function AccountSnapshotsSection(props: {
       <span className="font-medium">balance</span>, then Portfolio → Positions
       with caption <span className="font-medium">position</span>.
     </p>
+  ) : compact ? (
+    <div className="mt-2 space-y-1.5 text-sm leading-snug text-zinc-700 dark:text-zinc-300">
+      {snapshots?.balance ? (
+        <p>
+          <span className="text-xs font-medium uppercase text-zinc-500">Bal</span>{" "}
+          {fmtSnap(snapshots.balance.netLiquidation, snapshots.balance.currency)}{" "}
+          · excess{" "}
+          {fmtSnap(snapshots.balance.excessLiquidity, snapshots.balance.currency)}
+        </p>
+      ) : null}
+      {snapshots?.position ? (
+        <p>
+          <span className="text-xs font-medium uppercase text-zinc-500">Pos</span>{" "}
+          {snapshots.position.positions?.length ?? 0} lines · maint{" "}
+          {fmtSnap(
+            snapshots.position.maintenanceMargin,
+            snapshots.position.currency,
+          )}
+        </p>
+      ) : null}
+      <p className="text-xs text-zinc-500">
+        {snapshots?.balance ? fmtWhen(snapshots.balance.createdAt) : null}
+        {snapshots?.balance && snapshots?.position ? " · " : null}
+        {snapshots?.position ? fmtWhen(snapshots.position.createdAt) : null}
+      </p>
+    </div>
   ) : (
     <div className="mt-2 space-y-2">
       {snapshots?.balance ? (
@@ -1081,7 +1108,7 @@ function AccountSnapshotsSection(props: {
 
   return (
     <div
-      className={`rounded-xl border bg-white dark:bg-zinc-900 ${
+      className={`flex h-full flex-col rounded-xl border bg-white dark:bg-zinc-900 ${
         hasData
           ? "border-zinc-200 dark:border-zinc-800"
           : "border-dashed border-zinc-300 dark:border-zinc-700"
@@ -1099,7 +1126,9 @@ function AccountSnapshotsSection(props: {
           </h2>
           <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
             {hasData
-              ? "Latest Telegram uploads (caption balance / position)."
+              ? compact
+                ? "Latest IBKR uploads via Telegram."
+                : "Latest Telegram uploads (caption balance / position)."
               : "Optional — tap to set up."}
           </p>
         </div>
@@ -1145,9 +1174,21 @@ function WeeklyCoachSection(props: {
             Weekly coach
           </h2>
           <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-            Risk review from trades + account snapshots. Memory is saved for the
-            next run and exportable as Markdown.
+            Risk review from trades + account snapshots. Regenerate after fixes;
+            memory carries forward each week.
           </p>
+          {review ? (
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="font-medium text-zinc-600 dark:text-zinc-300">
+                Full review
+              </span>{" "}
+              = narrative + fact sheet JSON.{" "}
+              <span className="font-medium text-zinc-600 dark:text-zinc-300">
+                Coach memory
+              </span>{" "}
+              = short bullets only (paste into another LLM).
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -1163,16 +1204,18 @@ function WeeklyCoachSection(props: {
               <button
                 type="button"
                 onClick={onDownloadFull}
+                title="Full review: narrative, memory, and fact sheet JSON"
                 className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-800 dark:border-zinc-600 dark:text-zinc-200"
               >
-                Download MD
+                Full review (.md)
               </button>
               <button
                 type="button"
                 onClick={onDownloadMemory}
+                title="Coach memory only: compact bullets for another LLM"
                 className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-800 dark:border-zinc-600 dark:text-zinc-200"
               >
-                Memory MD
+                Coach memory (.md)
               </button>
             </>
           ) : null}

@@ -1,4 +1,9 @@
-import { isCloseSideForOpen, isOpenSide } from "./worthless-pnl";
+import {
+  canMarkWorthlessExpiration,
+  hasCloseMatchForHide,
+  isOpenSide,
+  type WorthlessGuardTrade,
+} from "./worthless-pnl";
 
 export type FactSheetFlag = {
   id: string;
@@ -62,7 +67,9 @@ export type WeeklyFactSheet = {
     maintenanceMargin: number | null;
     buyingPower: number | null;
     cash: number | null;
-    unrealizedPnl: number | null;
+    /** IBKR portfolio MTM — stocks + options + all holdings, not options-only. */
+    portfolioUnrealizedPnl: number | null;
+    portfolioRealizedPnl: number | null;
     initMarginPctOfNetLiq: number | null;
     maintMarginPctOfNetLiq: number | null;
     excessLiqPctOfNetLiq: number | null;
@@ -71,12 +78,22 @@ export type WeeklyFactSheet = {
     vega: number | null;
     balanceSnapshotAgeDays: number | null;
     positionSnapshotAgeDays: number | null;
+    portfolioPositionCount: number | null;
+  };
+  context: {
+    unrealizedPnlScope: string;
+    tradeLogScope: string;
   };
   trades: {
     totalTrades: number;
     totalRealizedPnl: number;
     needsReviewCount: number;
-    openLegsWithoutClose: number;
+    /** Open option legs (future expiry, no close row in log). */
+    activeOptionLegsInLog: number;
+    /** Expired opens still without close/worthless in log. */
+    expiredOpenLegsAwaitingClose: number;
+    /** Rows in log missing a detected close (data quality — not live exposure). */
+    historicalOpensMissingCloseRow: number;
     topUnderlyingsByCount: { underlying: string; count: number }[];
     topUnderlyingsByPnl: { underlying: string; pnl: number }[];
     lastThreeMonths: { month: string; count: number; pnl: number }[];
@@ -110,31 +127,55 @@ function weekEndingSunday(now = Date.now()): string {
   return d.toISOString().slice(0, 10);
 }
 
-function countOpenLegsWithoutClose(trades: TradeSlice[]): number {
-  const opens = trades.filter((t) => isOpenSide(t.side));
-  let count = 0;
-  for (const open of opens) {
-    const u = (open.underlying ?? "").toUpperCase();
-    const hasClose = trades.some(
-      (c) =>
-        (c.underlying ?? "").toUpperCase() === u &&
-        open.strike != null &&
-        c.strike === open.strike &&
-        isCloseSideForOpen(open.side, c.side),
-    );
-    if (!hasClose) count += 1;
-  }
-  return count;
+function todayUtc(now = Date.now()): string {
+  return new Date(now).toISOString().slice(0, 10);
+}
+
+function asGuardTrades(trades: TradeSlice[]): WorthlessGuardTrade[] {
+  return trades.map((t) => ({ ...t }));
+}
+
+/** Active option opens: future expiration, no close match in trade log. */
+function countActiveOptionLegsInLog(
+  trades: TradeSlice[],
+  now = Date.now(),
+): number {
+  const all = asGuardTrades(trades);
+  const today = todayUtc(now);
+  return trades.filter((t) => {
+    if (!isOpenSide(t.side)) return false;
+    if (!t.expiration || t.expiration < today) return false;
+    if (hasCloseMatchForHide(t, all)) return false;
+    return true;
+  }).length;
+}
+
+function countExpiredOpenLegsAwaitingClose(
+  trades: TradeSlice[],
+  now = Date.now(),
+): number {
+  const all = asGuardTrades(trades);
+  return trades.filter((t) => canMarkWorthlessExpiration(t, all, now)).length;
+}
+
+/** Log hygiene: any open row without close match (includes closed history with missing rows). */
+function countHistoricalOpensMissingCloseRow(trades: TradeSlice[]): number {
+  const all = asGuardTrades(trades);
+  return trades.filter(
+    (t) => isOpenSide(t.side) && !hasCloseMatchForHide(t, all),
+  ).length;
 }
 
 function buildFlags(input: {
   balance?: SnapshotSlice | null;
   position?: SnapshotSlice | null;
-  stats: StatsSlice;
-  openLegsWithoutClose: number;
+  activeOptionLegsInLog: number;
+  expiredOpenLegsAwaitingClose: number;
+  historicalOpensMissingCloseRow: number;
   needsReviewCount: number;
   initMarginPct: number | null;
   excessLiqPct: number | null;
+  portfolioPositionCount: number | null;
 }): FactSheetFlag[] {
   const flags: FactSheetFlag[] = [];
 
@@ -186,11 +227,29 @@ function buildFlags(input: {
     });
   }
 
-  if (input.openLegsWithoutClose > 0) {
+  if (input.expiredOpenLegsAwaitingClose > 0) {
     flags.push({
-      id: "open_legs_no_close",
+      id: "expired_opens_awaiting_close",
       severity: "info",
-      message: `${input.openLegsWithoutClose} open leg(s) have no matching close row in the trade log.`,
+      message: `${input.expiredOpenLegsAwaitingClose} expired open leg(s) in the trade log still lack a close or worthless mark.`,
+    });
+  }
+
+  const logGap =
+    input.historicalOpensMissingCloseRow - input.activeOptionLegsInLog;
+  if (logGap > 5) {
+    flags.push({
+      id: "trade_log_gaps",
+      severity: "info",
+      message: `${logGap} historical open row(s) lack a close in the log (data quality — not the same as live open exposure). Live snapshot shows ${input.portfolioPositionCount ?? "?"} positions.`,
+    });
+  }
+
+  if (input.activeOptionLegsInLog > 0 && input.portfolioPositionCount != null) {
+    flags.push({
+      id: "active_option_legs",
+      severity: "info",
+      message: `${input.activeOptionLegsInLog} active option open leg(s) in trade log (future expiry, no close row). IBKR snapshot: ${input.portfolioPositionCount} position line(s) total (stocks + options).`,
     });
   }
 
@@ -199,16 +258,6 @@ function buildFlags(input: {
       id: "trades_need_review",
       severity: "warn",
       message: `${input.needsReviewCount} trade row(s) flagged needs review.`,
-    });
-  }
-
-  const unreal = input.position?.unrealizedPnl;
-  const realized = input.stats.totalRealizedPnl;
-  if (unreal != null && Math.abs(unreal) > Math.abs(realized) * 5 && Math.abs(unreal) > 10000) {
-    flags.push({
-      id: "unrealized_dominates",
-      severity: "info",
-      message: `Unrealized P&L ($${unreal.toLocaleString()}) is much larger than cumulative realized ($${realized.toLocaleString()}).`,
     });
   }
 
@@ -236,7 +285,14 @@ export function buildWeeklyFactSheet(args: {
   const excessLiqPct = pct(excessLiq, netLiq);
 
   const needsReviewCount = args.trades.filter((t) => t.needsReview).length;
-  const openLegsWithoutClose = countOpenLegsWithoutClose(args.trades);
+  const activeOptionLegsInLog = countActiveOptionLegsInLog(args.trades, now);
+  const expiredOpenLegsAwaitingClose = countExpiredOpenLegsAwaitingClose(
+    args.trades,
+    now,
+  );
+  const historicalOpensMissingCloseRow =
+    countHistoricalOpensMissingCloseRow(args.trades);
+  const portfolioPositionCount = args.position?.positions?.length ?? null;
 
   const topPositionSymbols = (args.position?.positions ?? [])
     .slice()
@@ -251,11 +307,13 @@ export function buildWeeklyFactSheet(args: {
   const flags = buildFlags({
     balance: args.balance,
     position: args.position,
-    stats: args.stats,
-    openLegsWithoutClose,
+    activeOptionLegsInLog,
+    expiredOpenLegsAwaitingClose,
+    historicalOpensMissingCloseRow,
     needsReviewCount,
     initMarginPct,
     excessLiqPct,
+    portfolioPositionCount,
   });
 
   const lastThreeMonths = args.stats.byMonth.slice(-3);
@@ -263,6 +321,12 @@ export function buildWeeklyFactSheet(args: {
   return {
     generatedAt: now,
     weekEnding,
+    context: {
+      unrealizedPnlScope:
+        "IBKR portfolio unrealized P&L includes long-term stock holdings and all positions — not options-only. Do not compare to option trade-log realized P&L as a risk signal.",
+      tradeLogScope:
+        "Trade log is screenshot history (mostly options). Missing close rows are log gaps, not proof of live open risk. Use portfolioPositionCount from snapshot for book size.",
+    },
     account: {
       netLiquidation: netLiq,
       excessLiquidity: excessLiq,
@@ -270,7 +334,8 @@ export function buildWeeklyFactSheet(args: {
       maintenanceMargin: maintMargin,
       buyingPower: args.balance?.buyingPower ?? null,
       cash: args.balance?.cash ?? null,
-      unrealizedPnl: args.position?.unrealizedPnl ?? null,
+      portfolioUnrealizedPnl: args.position?.unrealizedPnl ?? null,
+      portfolioRealizedPnl: args.position?.realizedPnl ?? null,
       initMarginPctOfNetLiq: initMarginPct,
       maintMarginPctOfNetLiq: maintMarginPct,
       excessLiqPctOfNetLiq: excessLiqPct,
@@ -279,12 +344,15 @@ export function buildWeeklyFactSheet(args: {
       vega: args.position?.vega ?? null,
       balanceSnapshotAgeDays: ageDays(args.balance?.createdAt, now),
       positionSnapshotAgeDays: ageDays(args.position?.createdAt, now),
+      portfolioPositionCount,
     },
     trades: {
       totalTrades: args.stats.totalTrades,
       totalRealizedPnl: args.stats.totalRealizedPnl,
       needsReviewCount,
-      openLegsWithoutClose,
+      activeOptionLegsInLog,
+      expiredOpenLegsAwaitingClose,
+      historicalOpensMissingCloseRow,
       topUnderlyingsByCount: args.stats.byUnderlying.slice(0, 6),
       topUnderlyingsByPnl: [...args.stats.byUnderlyingPnl]
         .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl))

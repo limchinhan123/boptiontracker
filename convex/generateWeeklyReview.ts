@@ -104,9 +104,14 @@ Write from the provided factSheet JSON only. Do NOT give generic trading advice.
 Every sentence in narrativeMarkdown must cite a specific number, ticker, or flag from the fact sheet.
 Do not predict markets or recommend new trades.
 
+IMPORTANT context (in factSheet.context):
+- portfolioUnrealizedPnl is the FULL IBKR portfolio (long-term stocks + options). Never frame it as "option risk" or compare it to trade-log realized P&L as a danger signal.
+- historicalOpensMissingCloseRow is a trade-log data quality metric, NOT live open exposure. Use activeOptionLegsInLog and portfolioPositionCount instead.
+- Do not warn about "56 open legs" style exposure from missing close rows alone.
+
 narrativeMarkdown sections (use these headings):
 ## What changed
-## Top risks (max 3, numbered, with numbers)
+## Top risks (max 3, numbered, with numbers — margin, concentration, greeks, log gaps only)
 ## Data gaps
 ## One question for next week
 
