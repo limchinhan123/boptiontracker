@@ -3,6 +3,15 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  appendWorthlessNote,
+  canMarkWorthlessExpiration,
+  computeNetAmount,
+  computeWorthlessExpirationPnl,
+  expirationToPnlDate,
+  hasUnsetRealizedPnl,
+  isOpenSide,
+} from "@/lib/worthless-pnl";
 
 const DashboardCharts = dynamic(() => import("./dashboard-charts"), {
   ssr: false,
@@ -20,7 +29,7 @@ export type TradeRow = {
   _id: string;
   _creationTime: number;
   createdAt: number;
-  source: "telegram" | "whatsapp";
+  source: "telegram" | "whatsapp" | "manual";
   messageId: string;
   legIndex: number;
   underlying?: string;
@@ -40,6 +49,7 @@ export type TradeRow = {
   needsReview: boolean;
   ingestError?: string;
   realizedPnl?: number;
+  pnlDate?: number;
 };
 
 function formatMoney(
@@ -61,15 +71,203 @@ function formatOptionType(t?: TradeRow["optionType"]): string {
   return "—";
 }
 
-/** Premium/cash proxy: contract total if present, else qty × price × multiplier, minus fees. */
-function computeNetAmount(t: TradeRow): number | null {
-  const q = t.quantity ?? 0;
-  const p = t.price ?? 0;
-  const mult = t.multiplier ?? 100;
-  const premium = t.total != null ? t.total : q * p * mult;
-  const fees = t.fees ?? 0;
-  if (t.total == null && q === 0 && p === 0) return null;
-  return premium - fees;
+
+function ManualAddWorthlessSection(props: { onCreated: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    underlying: "",
+    optionType: "put" as TradeRow["optionType"],
+    strike: "",
+    expiration: "",
+    side: "SELL TO OPEN",
+    quantity: "1",
+    price: "",
+    fees: "",
+    multiplier: "100",
+    notes: "",
+  });
+
+  const preview = useMemo(() => {
+    return computeWorthlessExpirationPnl({
+      side: form.side,
+      quantity: form.quantity === "" ? undefined : Number(form.quantity),
+      price: form.price === "" ? undefined : Number(form.price),
+      fees: form.fees === "" ? undefined : Number(form.fees),
+      multiplier: form.multiplier === "" ? undefined : Number(form.multiplier),
+    });
+  }, [form]);
+
+  async function submitManual() {
+    if (!form.underlying.trim() || !form.expiration) {
+      window.alert("Underlying and expiration are required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/dashboard/create-trade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          worthlessExpiration: true,
+          underlying: form.underlying.trim().toUpperCase(),
+          optionType: form.optionType,
+          strike: form.strike === "" ? undefined : Number(form.strike),
+          expiration: form.expiration,
+          side: form.side,
+          quantity: form.quantity === "" ? undefined : Number(form.quantity),
+          price: form.price === "" ? undefined : Number(form.price),
+          fees: form.fees === "" ? undefined : Number(form.fees),
+          multiplier:
+            form.multiplier === "" ? undefined : Number(form.multiplier),
+          notes: form.notes || undefined,
+          needsReview: false,
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error ?? "Create failed");
+      }
+      setOpen(false);
+      props.onCreated();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Create failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-zinc-800 dark:text-zinc-200"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span>Add expired worthless (no screenshot)</span>
+        <span className="text-xs text-zinc-500">{open ? "Hide" : "Show"}</span>
+      </button>
+      {open ? (
+        <div className="border-t border-zinc-200 px-4 py-4 dark:border-zinc-800">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Fallback when you never sent the open screenshot. P&amp;L counts in
+            the expiration month.
+          </p>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <label className="text-xs font-medium text-zinc-500">
+              Underlying
+              <input
+                className="mt-0.5 block w-24 rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                value={form.underlying}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, underlying: e.target.value }))
+                }
+              />
+            </label>
+            <label className="text-xs font-medium text-zinc-500">
+              Type
+              <select
+                className="mt-0.5 block w-24 rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                value={form.optionType}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    optionType: e.target.value as TradeRow["optionType"],
+                  }))
+                }
+              >
+                <option value="put">Put</option>
+                <option value="call">Call</option>
+                <option value="unknown">Unknown</option>
+              </select>
+            </label>
+            <label className="text-xs font-medium text-zinc-500">
+              Strike
+              <input
+                className="mt-0.5 block w-20 rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                value={form.strike}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, strike: e.target.value }))
+                }
+              />
+            </label>
+            <label className="text-xs font-medium text-zinc-500">
+              Expiration
+              <input
+                type="date"
+                required
+                className="mt-0.5 block rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                value={form.expiration}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, expiration: e.target.value }))
+                }
+              />
+            </label>
+            <label className="text-xs font-medium text-zinc-500">
+              Side
+              <select
+                className="mt-0.5 block w-36 rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                value={form.side}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, side: e.target.value }))
+                }
+              >
+                <option value="SELL TO OPEN">SELL TO OPEN</option>
+                <option value="BUY TO OPEN">BUY TO OPEN</option>
+              </select>
+            </label>
+            <label className="text-xs font-medium text-zinc-500">
+              Qty
+              <input
+                className="mt-0.5 block w-16 rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                value={form.quantity}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, quantity: e.target.value }))
+                }
+              />
+            </label>
+            <label className="text-xs font-medium text-zinc-500">
+              Price
+              <input
+                className="mt-0.5 block w-24 rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                value={form.price}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, price: e.target.value }))
+                }
+              />
+            </label>
+            <label className="text-xs font-medium text-zinc-500">
+              Fees
+              <input
+                className="mt-0.5 block w-20 rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                value={form.fees}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, fees: e.target.value }))
+                }
+              />
+            </label>
+          </div>
+          <p className="mt-3 text-sm">
+            P&amp;L preview:{" "}
+            <span className={`font-semibold ${pnlClass(preview ?? 0)}`}>
+              {preview != null ? formatMoney(preview) : "—"}
+            </span>
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              disabled={saving}
+              className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm text-white disabled:opacity-60 dark:bg-emerald-600"
+              onClick={() => void submitManual()}
+            >
+              {saving ? "Saving…" : "Add trade"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
 }
 
 function pnlClass(n: number): string {
@@ -418,7 +616,11 @@ export default function DashboardClient() {
             <span className="font-medium text-zinc-600 dark:text-zinc-300">
               P&amp;L
             </span>{" "}
-            per row in Edit. Sort columns to reorder; cumulative P&amp;L updates in
+            per row in Edit, or use{" "}
+            <span className="font-medium text-zinc-600 dark:text-zinc-300">
+              Mark expired worthless
+            </span>{" "}
+            on open legs. Sort columns to reorder; cumulative P&amp;L updates in
             that order. Use{" "}
             <span className="font-medium text-zinc-600 dark:text-zinc-300">
               Download Excel
@@ -451,7 +653,7 @@ export default function DashboardClient() {
             Profit &amp; loss by month
           </h2>
           <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-            Realized P&amp;L grouped by calendar month (same data as the chart below).
+            Realized P&amp;L grouped by calendar month (uses expiration / P&amp;L date when set).
           </p>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full min-w-[18rem] text-sm">
@@ -540,6 +742,8 @@ export default function DashboardClient() {
         <p className="text-sm text-red-600 dark:text-red-400">{err}</p>
       ) : null}
 
+      <ManualAddWorthlessSection onCreated={() => void load()} />
+
       <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <table className="w-full min-w-[72rem] text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
@@ -619,7 +823,9 @@ export default function DashboardClient() {
         </table>
         {trades.length === 0 ? (
           <p className="p-6 text-center text-sm text-zinc-500">
-            No trades yet. Send a screenshot to your Telegram bot.
+            No trades yet. Send a SELL TO OPEN screenshot to your Telegram bot, or
+            use <span className="font-medium">Add expired worthless</span> below if
+            you have no screenshot.
           </p>
         ) : null}
       </div>
@@ -654,12 +860,18 @@ function tradeDraftFromTrade(t: TradeRow) {
   return {
     underlying: t.underlying ?? "",
     side: t.side ?? "",
+    optionType: t.optionType ?? "",
+    expiration: t.expiration ?? "",
     price:
       t.price === undefined || t.price === null ? "" : String(t.price),
     realizedPnl:
       t.realizedPnl === undefined || t.realizedPnl === null
         ? ""
         : String(t.realizedPnl),
+    pnlDate:
+      t.pnlDate == null
+        ? ""
+        : new Date(t.pnlDate).toISOString().slice(0, 10),
     strike: t.strike === undefined || t.strike === null ? "" : String(t.strike),
     quantity:
       t.quantity === undefined || t.quantity === null ? "" : String(t.quantity),
@@ -678,8 +890,17 @@ function TradeTableRow(props: {
   const { trade: t, cumulativePnl, onDelete, onUpdated } = props;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(() => tradeDraftFromTrade(t));
+  const [worthlessOpen, setWorthlessOpen] = useState(false);
+  const [worthlessExpiration, setWorthlessExpiration] = useState(
+    t.expiration ?? "",
+  );
+  const [worthlessSaving, setWorthlessSaving] = useState(false);
 
   async function save() {
+    const pnlDateTs =
+      draft.pnlDate === ""
+        ? undefined
+        : expirationToPnlDate(draft.pnlDate) ?? undefined;
     await fetch("/api/dashboard/update-trade", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -689,9 +910,15 @@ function TradeTableRow(props: {
         patch: {
           underlying: draft.underlying || undefined,
           side: draft.side || undefined,
+          optionType:
+            draft.optionType === ""
+              ? undefined
+              : (draft.optionType as TradeRow["optionType"]),
+          expiration: draft.expiration || undefined,
           price: draft.price === "" ? undefined : Number(draft.price),
           realizedPnl:
             draft.realizedPnl === "" ? undefined : Number(draft.realizedPnl),
+          pnlDate: pnlDateTs,
           strike: draft.strike === "" ? undefined : Number(draft.strike),
           quantity: draft.quantity === "" ? undefined : Number(draft.quantity),
           fees: draft.fees === "" ? undefined : Number(draft.fees),
@@ -703,6 +930,49 @@ function TradeTableRow(props: {
     setEditing(false);
     onUpdated();
   }
+
+  async function confirmMarkWorthless() {
+    const expiration = worthlessExpiration.trim() || t.expiration;
+    if (!expiration) {
+      window.alert("Enter an expiration date (YYYY-MM-DD) first.");
+      return;
+    }
+    const pnl = computeWorthlessExpirationPnl(t);
+    if (pnl == null) {
+      window.alert("Cannot compute P&L from this row (missing qty/price).");
+      return;
+    }
+    const pnlDate = expirationToPnlDate(expiration);
+    if (pnlDate == null) {
+      window.alert("Expiration must be YYYY-MM-DD.");
+      return;
+    }
+    setWorthlessSaving(true);
+    try {
+      await fetch("/api/dashboard/update-trade", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          tradeId: t._id,
+          patch: {
+            expiration,
+            realizedPnl: pnl,
+            pnlDate,
+            notes: appendWorthlessNote(t.notes),
+            needsReview: false,
+          },
+        }),
+      });
+      setWorthlessOpen(false);
+      onUpdated();
+    } finally {
+      setWorthlessSaving(false);
+    }
+  }
+
+  const showMarkWorthless = canMarkWorthlessExpiration(t);
+  const worthlessPreview = computeWorthlessExpirationPnl(t);
 
   const net = computeNetAmount(t);
   const pnl = t.realizedPnl;
@@ -735,6 +1005,44 @@ function TradeTableRow(props: {
                     setDraft((d) => ({ ...d, side: e.target.value }))
                   }
                   placeholder="e.g. SELL TO OPEN"
+                />
+              </label>
+              <label className="text-xs font-medium text-zinc-500">
+                Type
+                <select
+                  className="mt-0.5 block w-24 rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  value={draft.optionType}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, optionType: e.target.value }))
+                  }
+                >
+                  <option value="">—</option>
+                  <option value="call">Call</option>
+                  <option value="put">Put</option>
+                  <option value="unknown">Unknown</option>
+                </select>
+              </label>
+              <label className="text-xs font-medium text-zinc-500">
+                Expiration
+                <input
+                  type="date"
+                  className="mt-0.5 block rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  value={draft.expiration}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, expiration: e.target.value }))
+                  }
+                />
+              </label>
+              <label className="text-xs font-medium text-zinc-500">
+                P&amp;L date
+                <input
+                  type="date"
+                  className="mt-0.5 block rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  value={draft.pnlDate}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, pnlDate: e.target.value }))
+                  }
+                  title="Month this P&L counts toward (defaults to date entered)"
                 />
               </label>
               <label className="text-xs font-medium text-zinc-500">
@@ -848,6 +1156,11 @@ function TradeTableRow(props: {
             <span className="font-semibold text-zinc-900 dark:text-zinc-50">
               {t.underlying ?? "—"}
             </span>
+            {isOpenSide(t.side) && hasUnsetRealizedPnl(t.realizedPnl) ? (
+              <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-sky-900 dark:bg-sky-950 dark:text-sky-200">
+                Open
+              </span>
+            ) : null}
             {t.needsReview ? (
               <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-amber-900 dark:bg-amber-950 dark:text-amber-200">
                 Review
@@ -899,6 +1212,18 @@ function TradeTableRow(props: {
           {formatMoney(cumulativePnl)}
         </td>
         <td className="space-x-2 px-3 py-2.5 whitespace-nowrap">
+          {showMarkWorthless ? (
+            <button
+              type="button"
+              className="text-sm text-sky-700 dark:text-sky-400"
+              onClick={() => {
+                setWorthlessExpiration(t.expiration ?? "");
+                setWorthlessOpen(true);
+              }}
+            >
+              Mark expired worthless
+            </button>
+          ) : null}
           <button
             type="button"
             className="text-sm text-emerald-700 dark:text-emerald-400"
@@ -918,6 +1243,64 @@ function TradeTableRow(props: {
           </button>
         </td>
       </tr>
+      {worthlessOpen ? (
+        <tr className="border-b border-zinc-100 bg-sky-50 dark:border-zinc-800 dark:bg-sky-950/30">
+          <td colSpan={COLS} className="px-3 py-3">
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+              Mark expired worthless
+            </p>
+            <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+              {t.underlying ?? "—"}{" "}
+              {t.strike != null ? `${t.strike} ` : ""}
+              {formatOptionType(t.optionType)} · {t.side ?? "—"}
+            </p>
+            <p className="mt-2 text-sm">
+              Realized P&amp;L:{" "}
+              <span
+                className={`font-semibold ${pnlClass(worthlessPreview ?? 0)}`}
+              >
+                {worthlessPreview != null
+                  ? formatMoney(worthlessPreview, t.currency)
+                  : "—"}
+              </span>
+            </p>
+            {!t.expiration ? (
+              <label className="mt-3 block text-xs font-medium text-zinc-500">
+                Expiration (required for monthly P&amp;L)
+                <input
+                  type="date"
+                  className="mt-0.5 block rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                  value={worthlessExpiration}
+                  onChange={(e) => setWorthlessExpiration(e.target.value)}
+                />
+              </label>
+            ) : (
+              <p className="mt-2 text-xs text-zinc-500">
+                P&amp;L will count in{" "}
+                {formatMonthKey(t.expiration.slice(0, 7))} (expiration{" "}
+                {t.expiration}).
+              </p>
+            )}
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                disabled={worthlessSaving}
+                className="rounded-lg bg-sky-700 px-3 py-1.5 text-sm text-white disabled:opacity-60 dark:bg-sky-600"
+                onClick={() => void confirmMarkWorthless()}
+              >
+                {worthlessSaving ? "Saving…" : "Confirm"}
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-600"
+                onClick={() => setWorthlessOpen(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </td>
+        </tr>
+      ) : null}
       {t.ingestError ? (
         <tr className="border-b border-zinc-100 dark:border-zinc-800">
           <td

@@ -46,6 +46,7 @@ export async function PATCH(request: Request) {
       notes?: string;
       needsReview?: boolean;
       realizedPnl?: number;
+      pnlDate?: number;
     },
   });
   return NextResponse.json({ ok: true });

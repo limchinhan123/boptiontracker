@@ -6,7 +6,49 @@ import {
 } from "./_generated/server";
 import { v } from "convex/values";
 
-const sourceV = v.union(v.literal("telegram"), v.literal("whatsapp"));
+const sourceV = v.union(
+  v.literal("telegram"),
+  v.literal("whatsapp"),
+  v.literal("manual"),
+);
+
+const optionTypeV = v.union(
+  v.literal("call"),
+  v.literal("put"),
+  v.literal("unknown"),
+);
+
+function expirationToPnlDate(expiration: string): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(expiration.trim());
+  if (!m) return null;
+  const ts = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0);
+  return Number.isNaN(ts) ? null : ts;
+}
+
+function worthlessPnlFromLeg(args: {
+  side?: string;
+  quantity?: number;
+  price?: number;
+  total?: number;
+  fees?: number;
+  multiplier?: number;
+}): number | null {
+  const q = args.quantity ?? 0;
+  const p = args.price ?? 0;
+  const mult = args.multiplier ?? 100;
+  const premium = args.total != null ? args.total : q * p * mult;
+  if (args.total == null && q === 0 && p === 0) return null;
+  const net = premium - (args.fees ?? 0);
+  const s = (args.side ?? "").toUpperCase();
+  if (s.includes("SELL")) return Math.abs(net);
+  if (s.includes("BUY")) return -Math.abs(net);
+  return null;
+}
+
+function pnlMonthKey(ts: number): string {
+  const d = new Date(ts);
+  return Number.isNaN(d.getTime()) ? "unknown" : d.toISOString().slice(0, 7);
+}
 
 const tradeDoc = v.object({
   _id: v.id("trades"),
@@ -38,6 +80,7 @@ const tradeDoc = v.object({
   sheetsSyncedAt: v.optional(v.number()),
   sheetsSyncError: v.optional(v.string()),
   realizedPnl: v.optional(v.number()),
+  pnlDate: v.optional(v.number()),
 });
 
 function assertDashboardSecret(secret: string) {
@@ -214,10 +257,8 @@ export const stats = query({
       uCur.pnl += t.realizedPnl ?? 0;
       underlyingMap.set(u, uCur);
 
-      const created = new Date(t.createdAt);
-      const monthKey = Number.isNaN(created.getTime())
-        ? "unknown"
-        : created.toISOString().slice(0, 7);
+      const pnlTs = t.pnlDate ?? t.createdAt;
+      const monthKey = pnlMonthKey(pnlTs);
       const cur = monthMap.get(monthKey) ?? { count: 0, pnl: 0 };
       cur.count += 1;
       cur.pnl += t.realizedPnl ?? 0;
@@ -309,6 +350,7 @@ export const updateTrade = mutation({
       notes: v.optional(v.string()),
       needsReview: v.optional(v.boolean()),
       realizedPnl: v.optional(v.number()),
+      pnlDate: v.optional(v.number()),
     }),
   },
   returns: v.null(),
@@ -316,5 +358,74 @@ export const updateTrade = mutation({
     assertDashboardSecret(args.dashboardSecret);
     await ctx.db.patch(args.tradeId, args.patch);
     return null;
+  },
+});
+
+export const createManualTrade = mutation({
+  args: {
+    dashboardSecret: v.string(),
+    worthlessExpiration: v.boolean(),
+    underlying: v.optional(v.string()),
+    optionType: v.optional(optionTypeV),
+    strike: v.optional(v.number()),
+    expiration: v.optional(v.string()),
+    multiplier: v.optional(v.number()),
+    side: v.optional(v.string()),
+    quantity: v.optional(v.number()),
+    price: v.optional(v.number()),
+    total: v.optional(v.number()),
+    fees: v.optional(v.number()),
+    currency: v.optional(v.string()),
+    strategyTag: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    confidence: v.optional(v.number()),
+    needsReview: v.optional(v.boolean()),
+    realizedPnl: v.optional(v.number()),
+    pnlDate: v.optional(v.number()),
+  },
+  returns: v.id("trades"),
+  handler: async (ctx, args) => {
+    assertDashboardSecret(args.dashboardSecret);
+
+    let realizedPnl = args.realizedPnl;
+    if (args.worthlessExpiration) {
+      const computed = worthlessPnlFromLeg(args);
+      if (computed == null) {
+        throw new Error(
+          "Cannot compute P&L: need side, quantity/price or total",
+        );
+      }
+      realizedPnl = computed;
+    }
+
+    let pnlDate = args.pnlDate;
+    if (args.worthlessExpiration && args.expiration && pnlDate == null) {
+      pnlDate = expirationToPnlDate(args.expiration) ?? undefined;
+    }
+
+    const messageId = `manual:${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    return await ctx.db.insert("trades", {
+      createdAt: Date.now(),
+      source: "manual",
+      messageId,
+      legIndex: 0,
+      underlying: args.underlying,
+      optionType: args.optionType,
+      strike: args.strike,
+      expiration: args.expiration,
+      multiplier: args.multiplier,
+      side: args.side,
+      quantity: args.quantity,
+      price: args.price,
+      total: args.total,
+      fees: args.fees,
+      currency: args.currency,
+      strategyTag: args.strategyTag,
+      notes: args.notes,
+      confidence: args.confidence,
+      needsReview: args.needsReview ?? false,
+      realizedPnl,
+      pnlDate,
+    });
   },
 });

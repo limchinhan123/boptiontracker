@@ -4,7 +4,11 @@ import { v } from "convex/values";
 export default defineSchema({
   trades: defineTable({
     createdAt: v.number(),
-    source: v.union(v.literal("telegram"), v.literal("whatsapp")),
+    source: v.union(
+      v.literal("telegram"),
+      v.literal("whatsapp"),
+      v.literal("manual"),
+    ),
     messageId: v.string(),
     legIndex: v.number(),
     imageStorageId: v.optional(v.id("_storage")),
@@ -38,6 +42,9 @@ export default defineSchema({
 
     /** Realized P&L for this leg (optional; you can set via Edit on the dashboard). */
     realizedPnl: v.optional(v.number()),
+
+    /** When P&L counts for monthly stats; defaults to createdAt when unset. */
+    pnlDate: v.optional(v.number()),
   })
     .index("by_source_message", ["source", "messageId"])
     .index("by_message_leg", ["source", "messageId", "legIndex"])

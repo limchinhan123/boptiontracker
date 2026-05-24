@@ -45,6 +45,7 @@ export async function GET(request: Request) {
   const headers = [
     "Convex ID",
     "Created (UTC)",
+    "P&L date (UTC)",
     "Source",
     "Message ID",
     "Leg",
@@ -102,6 +103,7 @@ function rowFromTrade(
   return [
     t._id,
     new Date(t.createdAt),
+    new Date(t.pnlDate ?? t.createdAt),
     t.source,
     t.messageId,
     t.legIndex,
@@ -128,8 +130,8 @@ function rowFromTrade(
 
 function columnWidths(n: number): { width: number }[] {
   const w = [
-    28, 20, 10, 14, 6, 12, 10, 10, 12, 10, 22, 8, 10, 12, 10, 8, 12, 14, 14,
-    28, 12, 10, 24,
+    28, 20, 20, 10, 14, 6, 12, 10, 10, 12, 10, 22, 8, 10, 12, 10, 8, 12, 14,
+    14, 28, 12, 10, 24,
   ];
   return Array.from({ length: n }, (_, i) => ({ width: w[i] ?? 12 }));
 }
