@@ -15,6 +15,7 @@ import {
   hasUnsetRealizedPnl,
   isOpenSide,
 } from "@/lib/worthless-pnl";
+import { isStaleCoachText } from "@/lib/coach-payload";
 
 const DashboardCharts = dynamic(() => import("./dashboard-charts"), {
   ssr: false,
@@ -1155,6 +1156,10 @@ function WeeklyCoachSection(props: {
 }) {
   const { review, generating, onGenerate, onDownloadFull, onDownloadMemory } =
     props;
+  const [open, setOpen] = useState(false);
+  const stale = review
+    ? isStaleCoachText(review.narrativeMarkdown + review.memoryMarkdown)
+    : false;
 
   function fmtWhen(ts: number) {
     return new Date(ts).toLocaleString(undefined, {
@@ -1167,37 +1172,56 @@ function WeeklyCoachSection(props: {
   }
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+    <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-start justify-between gap-2 p-4 text-left lg:pointer-events-none"
+      >
+        <div className="min-w-0">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
             Weekly coach
           </h2>
           <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-            Risk review from trades + account snapshots. Regenerate after fixes;
-            memory carries forward each week.
+            {review
+              ? `Latest review · week ending ${review.weekEnding}`
+              : "Margin & concentration review — tap to expand."}
           </p>
-          {review ? (
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              <span className="font-medium text-zinc-600 dark:text-zinc-300">
-                Full review
-              </span>{" "}
-              = narrative + fact sheet JSON.{" "}
-              <span className="font-medium text-zinc-600 dark:text-zinc-300">
-                Coach memory
-              </span>{" "}
-              = short bullets only (paste into another LLM).
-            </p>
-          ) : null}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <span
+          className="mt-0.5 shrink-0 text-xs text-zinc-400 lg:hidden"
+          aria-hidden
+        >
+          {open ? "▲" : "▼"}
+        </span>
+      </button>
+
+      <div className={`px-4 pb-4 ${open ? "block" : "hidden"} lg:block`}>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Risk review from trades + account snapshots.{" "}
+          <span className="font-medium text-zinc-600 dark:text-zinc-300">
+            Full review
+          </span>{" "}
+          = narrative + fact sheet.{" "}
+          <span className="font-medium text-zinc-600 dark:text-zinc-300">
+            Coach memory
+          </span>{" "}
+          = bullets only for another LLM.
+        </p>
+
+        <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
             disabled={generating}
             onClick={onGenerate}
             className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm text-white disabled:opacity-60 dark:bg-emerald-600"
           >
-            {generating ? "Generating…" : review ? "Regenerate review" : "Generate review"}
+            {generating
+              ? "Generating…"
+              : review
+                ? "Regenerate review"
+                : "Generate review"}
           </button>
           {review ? (
             <>
@@ -1220,32 +1244,41 @@ function WeeklyCoachSection(props: {
             </>
           ) : null}
         </div>
-      </div>
 
-      {review ? (
-        <div className="mt-4 space-y-3">
-          <p className="text-xs text-zinc-500">
-            Week ending {review.weekEnding} · {fmtWhen(review.generatedAt)} ·{" "}
-            {review.model}
+        {stale ? (
+          <p className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
+            This review uses outdated metrics (e.g. open-leg or unrealized
+            P&amp;L warnings). Tap{" "}
+            <span className="font-medium">Regenerate review</span> for a
+            corrected coach run.
           </p>
-          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm leading-relaxed whitespace-pre-wrap text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">
-            {review.narrativeMarkdown}
-          </div>
-          {review.openQuestion ? (
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              <span className="font-medium text-zinc-800 dark:text-zinc-200">
-                Open question:
-              </span>{" "}
-              {review.openQuestion}
+        ) : null}
+
+        {review ? (
+          <div className="mt-4 space-y-3">
+            <p className="text-xs text-zinc-500">
+              Week ending {review.weekEnding} · {fmtWhen(review.generatedAt)} ·{" "}
+              {review.model}
             </p>
-          ) : null}
-        </div>
-      ) : (
-        <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
-          No review yet. Upload balance + position snapshots via Telegram, then
-          click Generate review.
-        </p>
-      )}
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm leading-relaxed whitespace-pre-wrap text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">
+              {review.narrativeMarkdown}
+            </div>
+            {review.openQuestion ? (
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                <span className="font-medium text-zinc-800 dark:text-zinc-200">
+                  Open question:
+                </span>{" "}
+                {review.openQuestion}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+            No review yet. Upload balance + position snapshots via Telegram,
+            then Generate review.
+          </p>
+        )}
+      </div>
     </section>
   );
 }

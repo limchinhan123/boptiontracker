@@ -32,6 +32,7 @@ export type SnapshotSlice = {
 };
 
 export type TradeSlice = {
+  _id?: string;
   underlying?: string;
   side?: string;
   strike?: number;
@@ -55,6 +56,7 @@ export type PriorReviewSlice = {
   generatedAt: number;
   memoryMarkdown: string;
   narrativeMarkdown: string;
+  openQuestion?: string;
 };
 
 export type WeeklyFactSheet = {

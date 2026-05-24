@@ -6,6 +6,7 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { action } from "./_generated/server";
 import { buildWeeklyFactSheet } from "../lib/weekly-fact-sheet";
+import { coachPayloadForPrompt } from "../lib/coach-payload";
 
 function assertDashboardSecret(secret: string) {
   const expected = process.env.DASHBOARD_SECRET;
@@ -47,6 +48,7 @@ export const generateWeeklyReview = action({
 
     const factSheet = buildWeeklyFactSheet({
       trades: trades.map((t) => ({
+        _id: t._id,
         underlying: t.underlying,
         side: t.side,
         strike: t.strike,
@@ -85,8 +87,19 @@ export const generateWeeklyReview = action({
         generatedAt: r.generatedAt,
         memoryMarkdown: r.memoryMarkdown,
         narrativeMarkdown: r.narrativeMarkdown,
+        openQuestion: r.openQuestion,
       })),
     });
+
+    const priorForCoach = priorReviews
+      .filter((r) => r.weekEnding !== factSheet.weekEnding)
+      .map((r) => ({
+        weekEnding: r.weekEnding,
+        generatedAt: r.generatedAt,
+        memoryMarkdown: r.memoryMarkdown,
+        narrativeMarkdown: r.narrativeMarkdown,
+        openQuestion: r.openQuestion,
+      }));
 
     const model =
       process.env.OPENAI_COACH_MODEL ??
@@ -100,26 +113,26 @@ export const generateWeeklyReview = action({
         {
           role: "system",
           content: `You are a margin and risk coach for an experienced options trader using IBKR.
-Write from the provided factSheet JSON only. Do NOT give generic trading advice.
-Every sentence in narrativeMarkdown must cite a specific number, ticker, or flag from the fact sheet.
-Do not predict markets or recommend new trades.
+Write ONLY from coachPayload JSON. Obey every string in coachPayload.constraints.
 
-IMPORTANT context (in factSheet.context):
-- portfolioUnrealizedPnl is the FULL IBKR portfolio (long-term stocks + options). Never frame it as "option risk" or compare it to trade-log realized P&L as a danger signal.
-- historicalOpensMissingCloseRow is a trade-log data quality metric, NOT live open exposure. Use activeOptionLegsInLog and portfolioPositionCount instead.
-- Do not warn about "56 open legs" style exposure from missing close rows alone.
+FORBIDDEN in narrativeMarkdown and memoryMarkdown:
+- Comparing portfolioUnrealizedPnl to trades.totalRealizedPnl as a risk
+- Claiming dozens of "open legs without closures" from log gaps
+- Treating portfolio MTM as something the user should "manage down" soon
 
-narrativeMarkdown sections (use these headings):
+REQUIRED focus for Top risks: initMarginPctOfNetLiq, excessLiqPctOfNetLiq, maintMarginPctOfNetLiq, theta/spxDelta/vega, concentration.topPositionSymbols (tickers + pctNetLiq).
+
+narrativeMarkdown headings:
 ## What changed
-## Top risks (max 3, numbered, with numbers — margin, concentration, greeks, log gaps only)
+## Top risks (max 3, numbered)
 ## Data gaps
 ## One question for next week
 
-memoryMarkdown: compact bullet list (max 12 bullets) for next week's coach — active risks, concentrations, open questions, snapshot staleness. No fluff.`,
+memoryMarkdown: max 12 bullets for next week. Never repeat forbidden topics.`,
         },
         {
           role: "user",
-          content: `factSheet:\n${JSON.stringify(factSheet, null, 2)}`,
+          content: `coachPayload:\n${coachPayloadForPrompt(factSheet, priorForCoach)}`,
         },
       ],
       response_format: {
