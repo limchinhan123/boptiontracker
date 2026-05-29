@@ -339,9 +339,23 @@ function formatMonthKey(ym: string): string {
   return d.toLocaleDateString(undefined, { month: "short", year: "numeric" });
 }
 
+function formatExpiration(iso?: string): string {
+  if (!iso) return "—";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  if (!m) return iso;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12));
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 type SortKey =
   | "createdAt"
   | "underlying"
+  | "expiration"
   | "side"
   | "optionType"
   | "price"
@@ -357,6 +371,14 @@ function compareTradesByKey(a: TradeRow, b: TradeRow, key: SortKey): number {
       return (a.underlying ?? "").localeCompare(b.underlying ?? "", undefined, {
         sensitivity: "base",
       });
+    case "expiration": {
+      const ea = a.expiration ?? "";
+      const eb = b.expiration ?? "";
+      if (!ea && !eb) return 0;
+      if (!ea) return 1;
+      if (!eb) return -1;
+      return ea.localeCompare(eb);
+    }
     case "side":
       return (a.side ?? "").localeCompare(b.side ?? "", undefined, {
         sensitivity: "base",
@@ -1016,6 +1038,13 @@ export default function DashboardClient({
                 onSort={onSortColumn}
               />
               <SortTh
+                label="Expiration"
+                columnKey="expiration"
+                currentKey={sortKey}
+                dir={sortDir}
+                onSort={onSortColumn}
+              />
+              <SortTh
                 label="Action"
                 columnKey="side"
                 currentKey={sortKey}
@@ -1656,7 +1685,7 @@ function TradeTableRow(props: {
   const pnl = t.realizedPnl;
   const dateEntered = new Date(t.createdAt);
 
-  const COLS = 9;
+  const COLS = 10;
 
   if (editing) {
     return (
@@ -1845,12 +1874,12 @@ function TradeTableRow(props: {
               </span>
             ) : null}
           </div>
-          {t.strike != null || t.expiration ? (
-            <p className="mt-0.5 text-[11px] text-zinc-500">
-              {t.strike != null ? `${t.strike} ` : ""}
-              {t.expiration ?? ""}
-            </p>
+          {t.strike != null ? (
+            <p className="mt-0.5 text-[11px] text-zinc-500">{t.strike}</p>
           ) : null}
+        </td>
+        <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-zinc-800 dark:text-zinc-200">
+          {formatExpiration(t.expiration)}
         </td>
         <td className="max-w-[10rem] px-3 py-2.5 text-xs leading-snug text-zinc-700 dark:text-zinc-300">
           {t.side ?? "—"}
