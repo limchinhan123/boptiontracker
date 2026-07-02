@@ -765,24 +765,34 @@ export default function DashboardClient({
     }
   }
 
-  /** Sorted rows; cumulative P&L is running total in **current display order**. */
+  /** Cumulative P&L is chronological so it keeps the same meaning when the table is sorted. */
+  const cumulativePnlByTradeId = useMemo(() => {
+    const map = new Map<string, number>();
+    let runningTotal = 0;
+    const chronological = [...(Array.isArray(trades) ? trades : [])].sort(
+      (a, b) => a.createdAt - b.createdAt || a._id.localeCompare(b._id),
+    );
+
+    for (const trade of chronological) {
+      runningTotal += trade.realizedPnl ?? 0;
+      map.set(trade._id, runningTotal);
+    }
+
+    return map;
+  }, [trades]);
+
+  /** Sorted rows for display. */
   const tableRows = useMemo(() => {
     const list = Array.isArray(trades) ? trades : [];
     const sorted = [...list].sort((a, b) => {
       const c = compareTradesByKey(a, b, sortKey);
       return sortDir === "asc" ? c : -c;
     });
-    return sorted.reduce<{ trade: TradeRow; cumulativePnl: number }[]>(
-      (acc, trade) => {
-        const prev = acc.at(-1)?.cumulativePnl ?? 0;
-        return [
-          ...acc,
-          { trade, cumulativePnl: prev + (trade.realizedPnl ?? 0) },
-        ];
-      },
-      [],
-    );
-  }, [trades, sortKey, sortDir]);
+    return sorted.map((trade) => ({
+      trade,
+      cumulativePnl: cumulativePnlByTradeId.get(trade._id) ?? 0,
+    }));
+  }, [trades, sortKey, sortDir, cumulativePnlByTradeId]);
 
   const monthPnlRows = useMemo(() => {
     if (!stats?.byMonth?.length) return [];
@@ -1091,7 +1101,7 @@ export default function DashboardClient({
               />
               <th
                 className="px-3 py-2.5 text-right font-medium"
-                title="Running total of realized P&amp;L in the current sort order"
+                title="Running total of realized P&L in chronological trade-date order"
               >
                 Cumulative P&amp;L
               </th>
