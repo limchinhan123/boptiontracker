@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   const needsReviewOnly = searchParams.get("needsReview") === "1";
   const limit = searchParams.get("limit")
     ? Number(searchParams.get("limit"))
-    : undefined;
+    : 500;
 
   try {
     const client = getConvexClient();
