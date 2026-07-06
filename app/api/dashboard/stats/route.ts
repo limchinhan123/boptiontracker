@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { api, getConvexClient, requireDashboardSecret } from "@/lib/convex-server";
+import { dashboardJsonError } from "@/lib/dashboard-api-error";
 import { cookieName, verifySessionCookie } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -17,8 +18,6 @@ export async function GET() {
     });
     return NextResponse.json(stats);
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Convex request failed";
-    console.error("[dashboard/stats]", message, e);
-    return NextResponse.json({ error: message }, { status: 502 });
+    return dashboardJsonError("dashboard/stats", e, "Stats load failed", 502);
   }
 }

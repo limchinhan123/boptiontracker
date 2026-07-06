@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { computeCoachHealth } from "@/lib/coach-health";
 import { COACH_LOGIC_VERSION } from "@/lib/coach-version";
 import { api, getConvexClient, requireDashboardSecret } from "@/lib/convex-server";
+import { dashboardJsonError } from "@/lib/dashboard-api-error";
 import { cookieName, verifySessionCookie } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -39,7 +40,11 @@ export async function GET() {
       archivedReviewCount,
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Convex request failed";
-    return NextResponse.json({ error: message }, { status: 502 });
+    return dashboardJsonError(
+      "dashboard/reviews/latest",
+      e,
+      "Review load failed",
+      502,
+    );
   }
 }

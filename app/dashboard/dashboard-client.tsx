@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   appendWorthlessNote,
   canMarkWorthlessExpiration,
@@ -330,6 +330,24 @@ type WeeklyReviewRow = {
   coachLogicVersion?: number;
 };
 
+type DashboardLoadFilters = {
+  underlying?: string;
+  needsReviewOnly?: boolean;
+};
+
+type DashboardLoadResult =
+  | { ok: false; error?: string }
+  | {
+      ok: true;
+      trades: TradeRow[];
+      stats: Stats;
+      snapshots: LatestSnapshots;
+      review: WeeklyReviewRow | null;
+      coachHealth: CoachHealth | null;
+      profileNotes: string;
+      archivedReviewCount: number;
+    };
+
 export type { LatestSnapshots, AccountSnapshotRow, WeeklyReviewRow, CoachHealth };
 
 function formatMonthKey(ym: string): string {
@@ -480,12 +498,35 @@ export default function DashboardClient({
   const [err, setErr] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const underlyingRef = useRef(underlying);
+  const needsReviewOnlyRef = useRef(needsReviewOnly);
+  const profileDirtyRef = useRef(profileDirty);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    underlyingRef.current = underlying;
+  }, [underlying]);
+
+  useEffect(() => {
+    needsReviewOnlyRef.current = needsReviewOnly;
+  }, [needsReviewOnly]);
+
+  useEffect(() => {
+    profileDirtyRef.current = profileDirty;
+  }, [profileDirty]);
+
+  const load = useCallback(async (
+    filters?: DashboardLoadFilters,
+  ): Promise<DashboardLoadResult> => {
     try {
+      const selectedUnderlying =
+        filters?.underlying ?? underlyingRef.current;
+      const selectedNeedsReviewOnly =
+        filters?.needsReviewOnly ?? needsReviewOnlyRef.current;
       const params = new URLSearchParams();
-      if (underlying.trim()) params.set("underlying", underlying.trim());
-      if (needsReviewOnly) params.set("needsReview", "1");
+      if (selectedUnderlying.trim()) {
+        params.set("underlying", selectedUnderlying.trim());
+      }
+      if (selectedNeedsReviewOnly) params.set("needsReview", "1");
       const [tRes, sRes, snapRes, reviewRes] = await Promise.all([
         fetch(`/api/dashboard/trades?${params}`, { credentials: "include" }),
         fetch("/api/dashboard/stats", { credentials: "include" }),
@@ -571,25 +612,35 @@ export default function DashboardClient({
         e instanceof Error ? e.message : "Unexpected error loading dashboard";
       return { ok: false as const, error: message };
     }
-  }, [underlying, needsReviewOnly]);
+  }, []);
 
-  const refreshDashboardData = useCallback(async () => {
-    const result = await load();
-    if (result.ok === false) {
-      if ("error" in result && result.error) {
-        setErr(result.error);
+  const applyDashboardData = useCallback(
+    (result: Extract<DashboardLoadResult, { ok: true }>) => {
+      setErr(null);
+      setTrades(result.trades);
+      setStats(result.stats);
+      setSnapshots(result.snapshots);
+      setReview(result.review);
+      setCoachHealth(result.coachHealth);
+      setArchivedReviewCount(result.archivedReviewCount);
+      if (!profileDirtyRef.current) setProfileNotes(result.profileNotes);
+    },
+    [],
+  );
+
+  const refreshDashboardData = useCallback(
+    async (filters?: DashboardLoadFilters) => {
+      const result = await load(filters);
+      if (result.ok === false) {
+        if ("error" in result && result.error) {
+          setErr(result.error);
+        }
+        return;
       }
-      return;
-    }
-    setErr(null);
-    setTrades(result.trades);
-    setStats(result.stats);
-    setSnapshots(result.snapshots);
-    setReview(result.review);
-    setCoachHealth(result.coachHealth);
-    setArchivedReviewCount(result.archivedReviewCount);
-    if (!profileDirty) setProfileNotes(result.profileNotes);
-  }, [load, profileDirty]);
+      applyDashboardData(result);
+    },
+    [applyDashboardData, load],
+  );
 
   useDashboardLiveSync(() => {
     void refreshDashboardData();
@@ -607,20 +658,13 @@ export default function DashboardClient({
         setLoading(false);
         return;
       }
-      setErr(null);
-      setTrades(result.trades);
-      setStats(result.stats);
-      setSnapshots(result.snapshots);
-      setReview(result.review);
-      setCoachHealth(result.coachHealth);
-      setArchivedReviewCount(result.archivedReviewCount);
-      if (!profileDirty) setProfileNotes(result.profileNotes);
+      applyDashboardData(result);
       setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [load, profileDirty]);
+  }, [applyDashboardData, load]);
 
   async function refreshCoachFromLatest() {
     const res = await fetch("/api/dashboard/reviews/latest", {
@@ -812,7 +856,7 @@ export default function DashboardClient({
       window.alert(j.error ?? "Delete failed");
       return;
     }
-    void load();
+    void refreshDashboardData();
   }
 
   async function generateReview() {
@@ -869,7 +913,7 @@ export default function DashboardClient({
       window.alert(j.error ?? "Clear failed");
       return;
     }
-    void load();
+    void refreshDashboardData();
   }
 
   function downloadExcel() {
@@ -1001,13 +1045,23 @@ export default function DashboardClient({
           <input
             type="checkbox"
             checked={needsReviewOnly}
-            onChange={(e) => setNeedsReviewOnly(e.target.checked)}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setNeedsReviewOnly(checked);
+              needsReviewOnlyRef.current = checked;
+              void refreshDashboardData({
+                underlying,
+                needsReviewOnly: checked,
+              });
+            }}
           />
           Needs review only
         </label>
         <button
           type="button"
-          onClick={() => void load()}
+          onClick={() =>
+            void refreshDashboardData({ underlying, needsReviewOnly })
+          }
           className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
         >
           Apply
@@ -1034,7 +1088,7 @@ export default function DashboardClient({
         <p className="text-sm text-red-600 dark:text-red-400">{err}</p>
       ) : null}
 
-      <ManualAddWorthlessSection onCreated={() => void load()} />
+      <ManualAddWorthlessSection onCreated={() => void refreshDashboardData()} />
 
       <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <table className="w-full min-w-[72rem] text-left text-sm">
@@ -1116,7 +1170,7 @@ export default function DashboardClient({
                 allTrades={trades}
                 cumulativePnl={cumulativePnl}
                 onDelete={() => void deleteOneTrade(t._id)}
-                onUpdated={() => void load()}
+                onUpdated={() => void refreshDashboardData()}
               />
             ))}
           </tbody>
@@ -1583,6 +1637,21 @@ function tradeDraftFromTrade(t: TradeRow) {
   };
 }
 
+async function readJsonError(res: Response, fallback: string): Promise<string> {
+  const j = (await res.json().catch(() => ({}))) as { error?: string };
+  return j.error ?? fallback;
+}
+
+function parseOptionalDraftNumber(label: string, value: string): number | undefined {
+  const trimmed = value.trim();
+  if (trimmed === "") return undefined;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n)) {
+    throw new Error(`${label} must be a valid number.`);
+  }
+  return n;
+}
+
 function TradeTableRow(props: {
   trade: TradeRow;
   allTrades: TradeRow[];
@@ -1600,11 +1669,41 @@ function TradeTableRow(props: {
   const [worthlessSaving, setWorthlessSaving] = useState(false);
 
   async function save() {
+    let price: number | undefined;
+    let realizedPnl: number | undefined;
+    let strike: number | undefined;
+    let quantity: number | undefined;
+    let fees: number | undefined;
+    try {
+      price = parseOptionalDraftNumber("Price", draft.price);
+      realizedPnl = parseOptionalDraftNumber("P&L", draft.realizedPnl);
+      strike = parseOptionalDraftNumber("Strike", draft.strike);
+      quantity = parseOptionalDraftNumber("Quantity", draft.quantity);
+      fees = parseOptionalDraftNumber("Fees", draft.fees);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Invalid numeric value.");
+      return;
+    }
+
     const pnlDateTs =
       draft.pnlDate === ""
         ? undefined
         : expirationToPnlDate(draft.pnlDate) ?? undefined;
-    await fetch("/api/dashboard/update-trade", {
+    const clearFields = [
+      draft.expiration.trim() === "" && t.expiration != null
+        ? "expiration"
+        : null,
+      draft.price.trim() === "" && t.price != null ? "price" : null,
+      draft.realizedPnl.trim() === "" && t.realizedPnl != null
+        ? "realizedPnl"
+        : null,
+      draft.pnlDate.trim() === "" && t.pnlDate != null ? "pnlDate" : null,
+      draft.strike.trim() === "" && t.strike != null ? "strike" : null,
+      draft.quantity.trim() === "" && t.quantity != null ? "quantity" : null,
+      draft.fees.trim() === "" && t.fees != null ? "fees" : null,
+      draft.notes.trim() === "" && t.notes != null ? "notes" : null,
+    ].filter((field): field is string => field !== null);
+    const res = await fetch("/api/dashboard/update-trade", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -1618,18 +1717,26 @@ function TradeTableRow(props: {
               ? undefined
               : (draft.optionType as TradeRow["optionType"]),
           expiration: draft.expiration || undefined,
-          price: draft.price === "" ? undefined : Number(draft.price),
-          realizedPnl:
-            draft.realizedPnl === "" ? undefined : Number(draft.realizedPnl),
+          price,
+          realizedPnl,
           pnlDate: pnlDateTs,
-          strike: draft.strike === "" ? undefined : Number(draft.strike),
-          quantity: draft.quantity === "" ? undefined : Number(draft.quantity),
-          fees: draft.fees === "" ? undefined : Number(draft.fees),
+          strike,
+          quantity,
+          fees,
           notes: draft.notes || undefined,
           needsReview: draft.needsReview,
         },
+        clearFields,
       }),
     });
+    if (res.status === 401) {
+      window.location.href = "/login";
+      return;
+    }
+    if (!res.ok) {
+      window.alert(await readJsonError(res, "Save failed"));
+      return;
+    }
     setEditing(false);
     onUpdated();
   }
@@ -1665,7 +1772,7 @@ function TradeTableRow(props: {
     }
     setWorthlessSaving(true);
     try {
-      await fetch("/api/dashboard/update-trade", {
+      const res = await fetch("/api/dashboard/update-trade", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -1680,6 +1787,14 @@ function TradeTableRow(props: {
           },
         }),
       });
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      if (!res.ok) {
+        window.alert(await readJsonError(res, "Save failed"));
+        return;
+      }
       setWorthlessOpen(false);
       onUpdated();
     } finally {

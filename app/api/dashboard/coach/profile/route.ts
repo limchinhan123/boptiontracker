@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { api, getConvexClient, requireDashboardSecret } from "@/lib/convex-server";
+import { dashboardJsonError } from "@/lib/dashboard-api-error";
 import { cookieName, verifySessionCookie } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -18,8 +19,12 @@ export async function GET() {
     });
     return NextResponse.json(profile);
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Profile load failed";
-    return NextResponse.json({ error: message }, { status: 502 });
+    return dashboardJsonError(
+      "dashboard/coach/profile",
+      e,
+      "Profile load failed",
+      502,
+    );
   }
 }
 
@@ -48,7 +53,11 @@ export async function PATCH(request: Request) {
     });
     return NextResponse.json({ ok: true });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Profile save failed";
-    return NextResponse.json({ error: message }, { status: 502 });
+    return dashboardJsonError(
+      "dashboard/coach/profile",
+      e,
+      "Profile save failed",
+      502,
+    );
   }
 }

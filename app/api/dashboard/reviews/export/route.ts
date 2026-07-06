@@ -4,6 +4,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { formatCoachExportMarkdown } from "@/lib/coach-markdown";
 import type { WeeklyFactSheet } from "@/lib/weekly-fact-sheet";
 import { api, getConvexClient, requireDashboardSecret } from "@/lib/convex-server";
+import { dashboardTextError } from "@/lib/dashboard-api-error";
 import { cookieName, verifySessionCookie } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -107,7 +108,11 @@ export async function GET(request: Request) {
       },
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Export failed";
-    return new Response(message, { status: 502 });
+    return dashboardTextError(
+      "dashboard/reviews/export",
+      e,
+      "Export failed",
+      502,
+    );
   }
 }

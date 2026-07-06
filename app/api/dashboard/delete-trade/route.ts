@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { api, getConvexClient, requireDashboardSecret } from "@/lib/convex-server";
+import { dashboardJsonError } from "@/lib/dashboard-api-error";
 import { cookieName, verifySessionCookie } from "@/lib/session";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -38,8 +39,6 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ ok: true });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Delete failed";
-    console.error("[dashboard/delete-trade]", message, e);
-    return NextResponse.json({ error: message }, { status: 502 });
+    return dashboardJsonError("dashboard/delete-trade", e, "Delete failed", 502);
   }
 }

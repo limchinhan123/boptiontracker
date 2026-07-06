@@ -195,7 +195,7 @@ export function isExpirationPast(
 }
 
 export function hasUnsetRealizedPnl(realizedPnl?: number | null): boolean {
-  return realizedPnl == null || realizedPnl === 0;
+  return realizedPnl == null;
 }
 
 export function hasStrictCloseMatch(

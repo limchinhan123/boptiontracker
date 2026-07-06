@@ -19,6 +19,50 @@ const optionTypeV = v.union(
   v.literal("unknown"),
 );
 
+type TradePatch = {
+  underlying?: string;
+  optionType?: "call" | "put" | "unknown";
+  strike?: number;
+  expiration?: string;
+  multiplier?: number;
+  side?: string;
+  quantity?: number;
+  price?: number;
+  total?: number;
+  fees?: number;
+  currency?: string;
+  strategyTag?: string;
+  notes?: string;
+  needsReview?: boolean;
+  realizedPnl?: number;
+  pnlDate?: number;
+};
+
+type ClearableTradeField =
+  | "realizedPnl"
+  | "pnlDate"
+  | "price"
+  | "fees"
+  | "notes"
+  | "strike"
+  | "quantity"
+  | "expiration";
+
+const clearableTradeFields = new Set<string>([
+  "realizedPnl",
+  "pnlDate",
+  "price",
+  "fees",
+  "notes",
+  "strike",
+  "quantity",
+  "expiration",
+]);
+
+function isClearableTradeField(field: string): field is ClearableTradeField {
+  return clearableTradeFields.has(field);
+}
+
 function expirationToPnlDate(expiration: string): number | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(expiration.trim());
   if (!m) return null;
@@ -146,6 +190,19 @@ export const insertTradeLeg = internalMutation({
   },
   returns: v.id("trades"),
   handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("trades")
+      .withIndex("by_message_leg", (q) =>
+        q
+          .eq("source", args.source)
+          .eq("messageId", args.messageId)
+          .eq("legIndex", args.legIndex),
+      )
+      .first();
+    if (existing) {
+      return existing._id;
+    }
+
     const id = await ctx.db.insert("trades", {
       createdAt: args.createdAt,
       source: args.source,
@@ -307,6 +364,10 @@ export const deleteTrade = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     assertDashboardSecret(args.dashboardSecret);
+    const row = await ctx.db.get(args.tradeId);
+    if (row?.imageStorageId) {
+      await ctx.storage.delete(row.imageStorageId);
+    }
     await ctx.db.delete(args.tradeId);
     await bumpDashboardFeed(ctx);
     return null;
@@ -324,6 +385,9 @@ export const clearAllTrades = mutation({
       const batch = await ctx.db.query("trades").take(200);
       if (batch.length === 0) break;
       for (const row of batch) {
+        if (row.imageStorageId) {
+          await ctx.storage.delete(row.imageStorageId);
+        }
         await ctx.db.delete(row._id);
         deleted += 1;
       }
@@ -359,11 +423,19 @@ export const updateTrade = mutation({
       realizedPnl: v.optional(v.number()),
       pnlDate: v.optional(v.number()),
     }),
+    clearFields: v.optional(v.array(v.string())),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     assertDashboardSecret(args.dashboardSecret);
-    await ctx.db.patch(args.tradeId, args.patch);
+    const patch: TradePatch = { ...args.patch };
+    for (const field of args.clearFields ?? []) {
+      if (!isClearableTradeField(field)) {
+        throw new Error(`Cannot clear field: ${field}`);
+      }
+      patch[field] = undefined;
+    }
+    await ctx.db.patch(args.tradeId, patch);
     await bumpDashboardFeed(ctx);
     return null;
   },
@@ -390,6 +462,8 @@ export const createManualTrade = mutation({
     needsReview: v.optional(v.boolean()),
     realizedPnl: v.optional(v.number()),
     pnlDate: v.optional(v.number()),
+    /** Trade date for historical IBKR backfills; defaults to now. */
+    createdAt: v.optional(v.number()),
   },
   returns: v.id("trades"),
   handler: async (ctx, args) => {
@@ -411,9 +485,11 @@ export const createManualTrade = mutation({
       pnlDate = expirationToPnlDate(args.expiration) ?? undefined;
     }
 
-    const messageId = `manual:${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const createdAt = args.createdAt ?? Date.now();
+    const prefix = args.createdAt != null ? "ibkr-backfill" : "manual";
+    const messageId = `${prefix}:${createdAt}-${Math.random().toString(36).slice(2, 10)}`;
     const id = await ctx.db.insert("trades", {
-      createdAt: Date.now(),
+      createdAt,
       source: "manual",
       messageId,
       legIndex: 0,

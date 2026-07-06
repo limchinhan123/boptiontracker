@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import ExcelJS from "exceljs";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { api, getConvexClient, requireDashboardSecret } from "@/lib/convex-server";
+import { dashboardTextError } from "@/lib/dashboard-api-error";
 import { cookieName, verifySessionCookie } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -28,9 +29,12 @@ export async function GET(request: Request) {
       limit: 500,
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Convex request failed";
-    console.error("[dashboard/export-excel]", message, e);
-    return new Response(message, { status: 502 });
+    return dashboardTextError(
+      "dashboard/export-excel",
+      e,
+      "Export failed",
+      502,
+    );
   }
 
   const sorted = [...trades].sort((a, b) => a.createdAt - b.createdAt);

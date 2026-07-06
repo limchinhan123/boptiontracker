@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { api, getConvexClient, requireDashboardSecret } from "@/lib/convex-server";
+import { dashboardJsonError } from "@/lib/dashboard-api-error";
 import { cookieName, verifySessionCookie } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -22,8 +23,11 @@ export async function POST() {
     });
     return NextResponse.json({ ok: true, review, ...result });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Review generation failed";
-    console.error("[dashboard/reviews/generate]", message, e);
-    return NextResponse.json({ error: message }, { status: 502 });
+    return dashboardJsonError(
+      "dashboard/reviews/generate",
+      e,
+      "Review generation failed",
+      502,
+    );
   }
 }

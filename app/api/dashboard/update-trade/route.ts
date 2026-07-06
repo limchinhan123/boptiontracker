@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { api, getConvexClient, requireDashboardSecret } from "@/lib/convex-server";
+import { dashboardJsonError } from "@/lib/dashboard-api-error";
 import { cookieName, verifySessionCookie } from "@/lib/session";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -14,6 +15,7 @@ export async function PATCH(request: Request) {
   let body: {
     tradeId?: string;
     patch?: Record<string, unknown>;
+    clearFields?: string[];
   };
   try {
     body = await request.json();
@@ -27,27 +29,37 @@ export async function PATCH(request: Request) {
     );
   }
   const client = getConvexClient();
-  await client.mutation(api.trades.updateTrade, {
-    dashboardSecret: requireDashboardSecret(),
-    tradeId: body.tradeId as Id<"trades">,
-    patch: body.patch as {
-      underlying?: string;
-      optionType?: "call" | "put" | "unknown";
-      strike?: number;
-      expiration?: string;
-      multiplier?: number;
-      side?: string;
-      quantity?: number;
-      price?: number;
-      total?: number;
-      fees?: number;
-      currency?: string;
-      strategyTag?: string;
-      notes?: string;
-      needsReview?: boolean;
-      realizedPnl?: number;
-      pnlDate?: number;
-    },
-  });
-  return NextResponse.json({ ok: true });
+  try {
+    await client.mutation(api.trades.updateTrade, {
+      dashboardSecret: requireDashboardSecret(),
+      tradeId: body.tradeId as Id<"trades">,
+      patch: body.patch as {
+        underlying?: string;
+        optionType?: "call" | "put" | "unknown";
+        strike?: number;
+        expiration?: string;
+        multiplier?: number;
+        side?: string;
+        quantity?: number;
+        price?: number;
+        total?: number;
+        fees?: number;
+        currency?: string;
+        strategyTag?: string;
+        notes?: string;
+        needsReview?: boolean;
+        realizedPnl?: number;
+        pnlDate?: number;
+      },
+      clearFields: Array.isArray(body.clearFields) ? body.clearFields : undefined,
+    });
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return dashboardJsonError(
+      "dashboard/update-trade",
+      e,
+      "Save failed — invalid data",
+      400,
+    );
+  }
 }

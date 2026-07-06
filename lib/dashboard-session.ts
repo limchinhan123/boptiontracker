@@ -2,7 +2,27 @@ import { createHmac, timingSafeEqual } from "crypto";
 
 export const DASHBOARD_SESSION_MESSAGE = "options-trade-dashboard-cookie-v1";
 
-export function deriveDashboardSessionToken(secret: string): string {
+function isoWeekBucket(ms: number): string {
+  const date = new Date(ms);
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(
+    ((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7,
+  );
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+export function deriveDashboardSessionToken(
+  secret: string,
+  bucket = isoWeekBucket(Date.now()),
+): string {
+  return createHmac("sha256", secret)
+    .update(`${DASHBOARD_SESSION_MESSAGE}:${bucket}`)
+    .digest("base64url");
+}
+
+export function deriveConvexDashboardSessionToken(secret: string): string {
   return createHmac("sha256", secret)
     .update(DASHBOARD_SESSION_MESSAGE)
     .digest("base64url");
@@ -15,14 +35,20 @@ export function verifyDashboardSessionToken(
   if (!token) {
     return false;
   }
-  const expected = deriveDashboardSessionToken(secret);
+  const now = Date.now();
+  const expectedTokens = [
+    deriveDashboardSessionToken(secret, isoWeekBucket(now)),
+    deriveDashboardSessionToken(secret, isoWeekBucket(now - 7 * 86400000)),
+  ];
   try {
     const a = Buffer.from(token);
-    const b = Buffer.from(expected);
-    if (a.length !== b.length) {
-      return false;
+    for (const expected of expectedTokens) {
+      const b = Buffer.from(expected);
+      if (a.length === b.length && timingSafeEqual(a, b)) {
+        return true;
+      }
     }
-    return timingSafeEqual(a, b);
+    return false;
   } catch {
     return false;
   }

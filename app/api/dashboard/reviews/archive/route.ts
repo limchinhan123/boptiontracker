@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { api, getConvexClient, requireDashboardSecret } from "@/lib/convex-server";
+import { dashboardJsonError } from "@/lib/dashboard-api-error";
 import { cookieName, verifySessionCookie } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -36,8 +37,11 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ ok: true, archived, review, ...result });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Archive failed";
-    console.error("[dashboard/reviews/archive]", message, e);
-    return NextResponse.json({ error: message }, { status: 502 });
+    return dashboardJsonError(
+      "dashboard/reviews/archive",
+      e,
+      "Archive failed",
+      502,
+    );
   }
 }
