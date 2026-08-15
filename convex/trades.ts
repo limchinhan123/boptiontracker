@@ -366,7 +366,11 @@ export const deleteTrade = mutation({
     assertDashboardSecret(args.dashboardSecret);
     const row = await ctx.db.get(args.tradeId);
     if (row?.imageStorageId) {
-      await ctx.storage.delete(row.imageStorageId);
+      try {
+        await ctx.storage.delete(row.imageStorageId);
+      } catch {
+        // Stale/missing screenshot refs should not block trade deletion.
+      }
     }
     await ctx.db.delete(args.tradeId);
     await bumpDashboardFeed(ctx);
@@ -386,7 +390,11 @@ export const clearAllTrades = mutation({
       if (batch.length === 0) break;
       for (const row of batch) {
         if (row.imageStorageId) {
-          await ctx.storage.delete(row.imageStorageId);
+          try {
+            await ctx.storage.delete(row.imageStorageId);
+          } catch {
+            // Stale/missing screenshot refs should not block trade deletion.
+          }
         }
         await ctx.db.delete(row._id);
         deleted += 1;
