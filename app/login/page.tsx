@@ -32,27 +32,24 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-full flex-1 flex-col items-center justify-center bg-zinc-100 px-4 dark:bg-zinc-950">
-      <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+    <div className="flex min-h-full flex-1 flex-col items-center justify-center px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-edge bg-surface p-8 shadow-sm">
+        <h1 className="text-lg font-semibold text-ink">
           Options trade dashboard
         </h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="mt-1 text-sm text-ink-muted">
           Enter the dashboard password configured in{" "}
-          <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">
-            DASHBOARD_SECRET
-          </code>
-          .
+          <code className="rounded bg-surface-2 px-1">DASHBOARD_SECRET</code>.
         </p>
         <form className="mt-6 space-y-4" onSubmit={onSubmit}>
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label className="block text-sm font-medium text-ink-soft">
             Password
             <input
               type="password"
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 outline-none focus:border-emerald-600 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+              className="mt-1 w-full rounded-lg border border-edge-strong bg-field px-3 py-2 text-ink outline-none focus:border-accent"
             />
           </label>
           {error ? (
@@ -61,7 +58,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-emerald-700 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-800 disabled:opacity-50"
+            className="w-full rounded-lg bg-accent-solid py-2.5 text-sm font-medium text-white transition hover:bg-accent-solid-hover disabled:opacity-50"
           >
             {loading ? "Signing in…" : "Sign in"}
           </button>

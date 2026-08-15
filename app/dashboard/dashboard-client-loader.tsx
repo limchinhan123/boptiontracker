@@ -7,7 +7,7 @@ import { ConvexDashboardProvider } from "./convex-dashboard-provider";
 const DashboardClient = dynamic(() => import("./dashboard-client"), {
   ssr: false,
   loading: () => (
-    <div className="flex flex-1 items-center justify-center text-zinc-500">
+    <div className="flex flex-1 items-center justify-center text-ink-muted">
       Loading…
     </div>
   ),

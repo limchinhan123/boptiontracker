@@ -39,10 +39,10 @@ function pnlTooltipFormatter(value: unknown): [ReactNode, string] {
   const money = formatMoney(num);
   const colorClass =
     num < 0
-      ? "text-red-600 dark:text-red-400"
+      ? "text-pnl-down"
       : num > 0
-        ? "text-emerald-600 dark:text-emerald-400"
-        : "text-zinc-700 dark:text-zinc-300";
+        ? "text-pnl-up"
+        : "text-ink-soft";
   return [
     <span key="pnl" className={colorClass}>
       {money}
@@ -92,11 +92,11 @@ function ChartsInner({
 }: DashboardChartsProps) {
   return (
     <section className="grid gap-6 lg:grid-cols-2">
-      <div className="flex h-64 flex-col rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="shrink-0 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+      <div className="flex h-64 flex-col rounded-xl border border-edge bg-surface p-4">
+        <h2 className="shrink-0 text-sm font-medium text-ink-soft">
           Trades by underlying
         </h2>
-        <p className="mb-1 shrink-0 text-[11px] text-zinc-500 dark:text-zinc-400">
+        <p className="mb-1 shrink-0 text-[11px] text-ink-muted">
           Top tickers by trade count (up to 12)
         </p>
         <div className="min-h-0 min-w-0 flex-1">
@@ -104,7 +104,7 @@ function ChartsInner({
             <BarChart data={byUnderlying}>
               <CartesianGrid
                 strokeDasharray="3 3"
-                className="stroke-zinc-200 dark:stroke-zinc-700"
+                className="stroke-edge"
               />
               <XAxis dataKey="underlying" tick={{ fontSize: 11 }} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
@@ -115,11 +115,11 @@ function ChartsInner({
         </div>
       </div>
 
-      <div className="flex h-64 flex-col rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="shrink-0 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+      <div className="flex h-64 flex-col rounded-xl border border-edge bg-surface p-4">
+        <h2 className="shrink-0 text-sm font-medium text-ink-soft">
           Trades by month
         </h2>
-        <p className="mb-1 shrink-0 text-[11px] text-zinc-500 dark:text-zinc-400">
+        <p className="mb-1 shrink-0 text-[11px] text-ink-muted">
           Number of trades in each month
         </p>
         <div className="min-h-0 min-w-0 flex-1">
@@ -127,7 +127,7 @@ function ChartsInner({
             <BarChart data={monthChartData}>
               <CartesianGrid
                 strokeDasharray="3 3"
-                className="stroke-zinc-200 dark:stroke-zinc-700"
+                className="stroke-edge"
               />
               <XAxis dataKey="monthLabel" tick={{ fontSize: 10 }} />
               <YAxis
@@ -155,11 +155,11 @@ function ChartsInner({
         </div>
       </div>
 
-      <div className="flex h-64 flex-col rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="shrink-0 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+      <div className="flex h-64 flex-col rounded-xl border border-edge bg-surface p-4">
+        <h2 className="shrink-0 text-sm font-medium text-ink-soft">
           Realized P&amp;L by underlying
         </h2>
-        <p className="mb-1 shrink-0 text-[11px] text-zinc-500 dark:text-zinc-400">
+        <p className="mb-1 shrink-0 text-[11px] text-ink-muted">
           Same top 12 tickers: sum of realized P&amp;L per symbol
         </p>
         <div className="min-h-0 min-w-0 flex-1">
@@ -167,7 +167,7 @@ function ChartsInner({
             <BarChart data={byUnderlyingPnl}>
               <CartesianGrid
                 strokeDasharray="3 3"
-                className="stroke-zinc-200 dark:stroke-zinc-700"
+                className="stroke-edge"
               />
               <XAxis dataKey="underlying" tick={{ fontSize: 10 }} />
               <YAxis
@@ -196,11 +196,11 @@ function ChartsInner({
         </div>
       </div>
 
-      <div className="flex h-64 flex-col rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="shrink-0 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+      <div className="flex h-64 flex-col rounded-xl border border-edge bg-surface p-4">
+        <h2 className="shrink-0 text-sm font-medium text-ink-soft">
           Realized P&amp;L by month
         </h2>
-        <p className="mb-1 shrink-0 text-[11px] text-zinc-500 dark:text-zinc-400">
+        <p className="mb-1 shrink-0 text-[11px] text-ink-muted">
           Sum of realized P&amp;L booked in each month
         </p>
         <div className="min-h-0 min-w-0 flex-1">
@@ -208,7 +208,7 @@ function ChartsInner({
             <BarChart data={monthChartData}>
               <CartesianGrid
                 strokeDasharray="3 3"
-                className="stroke-zinc-200 dark:stroke-zinc-700"
+                className="stroke-edge"
               />
               <XAxis dataKey="monthLabel" tick={{ fontSize: 10 }} />
               <YAxis
@@ -250,10 +250,10 @@ export default function DashboardCharts(props: DashboardChartsProps) {
   if (!mounted) {
     return (
       <section className="grid gap-6 lg:grid-cols-2">
-        <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
-        <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
-        <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
-        <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
+        <div className="h-64 animate-pulse rounded-xl border border-edge bg-surface-2" />
+        <div className="h-64 animate-pulse rounded-xl border border-edge bg-surface-2" />
+        <div className="h-64 animate-pulse rounded-xl border border-edge bg-surface-2" />
+        <div className="h-64 animate-pulse rounded-xl border border-edge bg-surface-2" />
       </section>
     );
   }

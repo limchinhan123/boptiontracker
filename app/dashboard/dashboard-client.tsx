@@ -28,10 +28,10 @@ const DashboardCharts = dynamic(() => import("./dashboard-charts"), {
   ssr: false,
   loading: () => (
     <section className="grid gap-6 lg:grid-cols-2">
-      <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
-      <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
-      <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
-      <div className="h-64 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
+      <div className="h-64 animate-pulse rounded-xl border border-edge bg-surface-2" />
+      <div className="h-64 animate-pulse rounded-xl border border-edge bg-surface-2" />
+      <div className="h-64 animate-pulse rounded-xl border border-edge bg-surface-2" />
+      <div className="h-64 animate-pulse rounded-xl border border-edge bg-surface-2" />
     </section>
   ),
 });
@@ -150,36 +150,46 @@ function ManualAddWorthlessSection(props: { onCreated: () => void }) {
   }
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+    <section className="rounded-xl border border-edge bg-surface">
       <button
         type="button"
-        className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-zinc-800 dark:text-zinc-200"
+        aria-expanded={open}
+        className="flex w-full items-start justify-between gap-2 p-4 text-left hover:bg-surface-hover"
         onClick={() => setOpen((v) => !v)}
       >
-        <span>Add expired worthless (no screenshot)</span>
-        <span className="text-xs text-zinc-500">{open ? "Hide" : "Show"}</span>
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-ink">
+            Add expired worthless
+          </h2>
+          <p className="mt-0.5 text-xs text-ink-muted">
+            No-screenshot fallback · click to {open ? "collapse" : "expand"}
+          </p>
+        </div>
+        <span className="mt-0.5 shrink-0 text-xs text-ink-muted" aria-hidden>
+          {open ? "▲" : "▼"}
+        </span>
       </button>
       {open ? (
-        <div className="border-t border-zinc-200 px-4 py-4 dark:border-zinc-800">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="border-t border-edge px-4 py-4">
+          <p className="text-xs text-ink-muted">
             Fallback when you never sent the open screenshot. P&amp;L counts in
             the expiration month.
           </p>
           <div className="mt-3 flex flex-wrap items-end gap-3">
-            <label className="text-xs font-medium text-zinc-500">
+            <label className="text-xs font-medium text-ink-muted">
               Underlying
               <input
-                className="mt-0.5 block w-24 rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                className="mt-0.5 block w-24 rounded border border-edge-strong bg-field px-2 py-1 text-sm"
                 value={form.underlying}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, underlying: e.target.value }))
                 }
               />
             </label>
-            <label className="text-xs font-medium text-zinc-500">
+            <label className="text-xs font-medium text-ink-muted">
               Type
               <select
-                className="mt-0.5 block w-24 rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                className="mt-0.5 block w-24 rounded border border-edge-strong bg-field px-2 py-1 text-sm"
                 value={form.optionType}
                 onChange={(e) =>
                   setForm((f) => ({
@@ -193,32 +203,32 @@ function ManualAddWorthlessSection(props: { onCreated: () => void }) {
                 <option value="unknown">Unknown</option>
               </select>
             </label>
-            <label className="text-xs font-medium text-zinc-500">
+            <label className="text-xs font-medium text-ink-muted">
               Strike
               <input
-                className="mt-0.5 block w-20 rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                className="mt-0.5 block w-20 rounded border border-edge-strong bg-field px-2 py-1 text-sm"
                 value={form.strike}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, strike: e.target.value }))
                 }
               />
             </label>
-            <label className="text-xs font-medium text-zinc-500">
+            <label className="text-xs font-medium text-ink-muted">
               Expiration
               <input
                 type="date"
                 required
-                className="mt-0.5 block rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                className="mt-0.5 block rounded border border-edge-strong bg-field px-2 py-1 text-sm"
                 value={form.expiration}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, expiration: e.target.value }))
                 }
               />
             </label>
-            <label className="text-xs font-medium text-zinc-500">
+            <label className="text-xs font-medium text-ink-muted">
               Side
               <select
-                className="mt-0.5 block w-36 rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                className="mt-0.5 block w-36 rounded border border-edge-strong bg-field px-2 py-1 text-sm"
                 value={form.side}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, side: e.target.value }))
@@ -228,30 +238,30 @@ function ManualAddWorthlessSection(props: { onCreated: () => void }) {
                 <option value="BUY TO OPEN">BUY TO OPEN</option>
               </select>
             </label>
-            <label className="text-xs font-medium text-zinc-500">
+            <label className="text-xs font-medium text-ink-muted">
               Qty
               <input
-                className="mt-0.5 block w-16 rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                className="mt-0.5 block w-16 rounded border border-edge-strong bg-field px-2 py-1 text-sm"
                 value={form.quantity}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, quantity: e.target.value }))
                 }
               />
             </label>
-            <label className="text-xs font-medium text-zinc-500">
+            <label className="text-xs font-medium text-ink-muted">
               Price
               <input
-                className="mt-0.5 block w-24 rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                className="mt-0.5 block w-24 rounded border border-edge-strong bg-field px-2 py-1 text-sm"
                 value={form.price}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, price: e.target.value }))
                 }
               />
             </label>
-            <label className="text-xs font-medium text-zinc-500">
+            <label className="text-xs font-medium text-ink-muted">
               Fees
               <input
-                className="mt-0.5 block w-20 rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                className="mt-0.5 block w-20 rounded border border-edge-strong bg-field px-2 py-1 text-sm"
                 value={form.fees}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, fees: e.target.value }))
@@ -269,7 +279,7 @@ function ManualAddWorthlessSection(props: { onCreated: () => void }) {
             <button
               type="button"
               disabled={saving}
-              className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm text-white disabled:opacity-60 dark:bg-emerald-600"
+              className="rounded-lg bg-accent-solid px-3 py-1.5 text-sm text-white disabled:opacity-60"
               onClick={() => void submitManual()}
             >
               {saving ? "Saving…" : "Add trade"}
@@ -282,11 +292,9 @@ function ManualAddWorthlessSection(props: { onCreated: () => void }) {
 }
 
 function pnlClass(n: number): string {
-  if (n > 0)
-    return "text-emerald-700 tabular-nums dark:text-emerald-400";
-  if (n < 0)
-    return "text-red-600 tabular-nums dark:text-red-400";
-  return "tabular-nums text-zinc-700 dark:text-zinc-300";
+  if (n > 0) return "text-pnl-up tabular-nums";
+  if (n < 0) return "text-pnl-down tabular-nums";
+  return "tabular-nums text-ink-soft";
 }
 
 type Stats = {
@@ -461,7 +469,7 @@ function SortTh({
       <button
         type="button"
         onClick={() => onSort(columnKey)}
-        className={`inline-flex w-full items-center gap-1 font-medium uppercase tracking-wide ${btnAlign} text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200`}
+        className={`inline-flex w-full items-center gap-1 font-medium uppercase tracking-wide ${btnAlign} text-ink-muted hover:text-ink`}
       >
         <span>{label}</span>
         <span className="select-none text-[10px] opacity-70" aria-hidden>
@@ -929,7 +937,7 @@ export default function DashboardClient({
 
   if (loading && !trades.length) {
     return (
-      <div className="flex flex-1 items-center justify-center text-zinc-500">
+      <div className="flex flex-1 items-center justify-center text-ink-muted">
         Loading…
       </div>
     );
@@ -938,12 +946,12 @@ export default function DashboardClient({
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+        <h1 className="text-2xl font-semibold tracking-tight text-ink">
           Options trades
         </h1>
         <Link
           href="/"
-          className="text-sm text-emerald-700 hover:underline dark:text-emerald-400"
+          className="text-sm text-accent hover:underline"
         >
           Home
         </Link>
@@ -985,17 +993,17 @@ export default function DashboardClient({
       />
 
       {monthPnlRows.length > 0 ? (
-        <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+        <section className="rounded-xl border border-edge bg-surface p-4">
+          <h2 className="text-sm font-semibold text-ink">
             Profit &amp; loss by month
           </h2>
-          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="mt-0.5 text-xs text-ink-muted">
             Realized P&amp;L grouped by calendar month (uses expiration / P&amp;L date when set).
           </p>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full min-w-[18rem] text-sm">
               <thead>
-                <tr className="border-b border-zinc-200 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                <tr className="border-b border-edge text-left text-xs uppercase tracking-wide text-ink-muted">
                   <th className="py-2 pr-4 font-medium">Month</th>
                   <th className="py-2 pr-4 text-right font-medium">Trades</th>
                   <th className="py-2 text-right font-medium">P&amp;L</th>
@@ -1005,12 +1013,12 @@ export default function DashboardClient({
                 {monthPnlRows.map((row) => (
                   <tr
                     key={row.month}
-                    className="border-b border-zinc-100 dark:border-zinc-800/80"
+                    className="border-b border-edge-soft"
                   >
-                    <td className="py-2 pr-4 text-zinc-800 dark:text-zinc-200">
+                    <td className="py-2 pr-4 text-ink">
                       {formatMonthKey(row.month)}
                     </td>
-                    <td className="py-2 pr-4 text-right tabular-nums text-zinc-600 dark:text-zinc-300">
+                    <td className="py-2 pr-4 text-right tabular-nums text-ink-soft">
                       {row.count}
                     </td>
                     <td
@@ -1032,17 +1040,17 @@ export default function DashboardClient({
         monthChartData={monthChartData}
       />
 
-      <section className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+      <section className="flex flex-wrap items-center gap-3 rounded-xl border border-edge bg-surface p-4">
+        <label className="flex items-center gap-2 text-sm text-ink-soft">
           Underlying prefix
           <input
             value={underlying}
             onChange={(e) => setUnderlying(e.target.value)}
             placeholder="e.g. SPY"
-            className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+            className="rounded-lg border border-edge-strong bg-field px-2 py-1.5 text-ink"
           />
         </label>
-        <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+        <label className="flex items-center gap-2 text-sm text-ink-soft">
           <input
             type="checkbox"
             checked={needsReviewOnly}
@@ -1063,14 +1071,14 @@ export default function DashboardClient({
           onClick={() =>
             void refreshDashboardData({ underlying, needsReviewOnly })
           }
-          className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900"
+          className="rounded-lg bg-ink px-3 py-1.5 text-sm text-background"
         >
           Apply
         </button>
         <button
           type="button"
           onClick={() => downloadExcel()}
-          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800/60"
+          className="rounded-lg border border-edge-strong px-3 py-1.5 text-sm text-ink-soft hover:bg-surface-hover"
         >
           Download Excel
         </button>
@@ -1091,35 +1099,35 @@ export default function DashboardClient({
 
       <ManualAddWorthlessSection onCreated={() => void refreshDashboardData()} />
 
-      <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <section className="rounded-xl border border-edge bg-surface">
         <button
           type="button"
           aria-expanded={journalOpen}
           onClick={() => setJournalOpen((v) => !v)}
-          className="flex w-full items-start justify-between gap-2 p-4 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+          className="flex w-full items-start justify-between gap-2 p-4 text-left hover:bg-surface-hover"
         >
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            <h2 className="text-sm font-semibold text-ink">
               Trade journal
             </h2>
-            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="mt-0.5 text-xs text-ink-muted">
               {trades.length} trade{trades.length === 1 ? "" : "s"}
               {needsReviewOnly ? " · needs review only" : ""}
               {underlying.trim() ? ` · ${underlying.trim()}` : ""}
               {` · click to ${journalOpen ? "collapse" : "expand"}`}
             </p>
           </div>
-          <span className="mt-0.5 shrink-0 text-xs text-zinc-400" aria-hidden>
+          <span className="mt-0.5 shrink-0 text-xs text-ink-muted" aria-hidden>
             {journalOpen ? "▲" : "▼"}
           </span>
         </button>
         <div
-          className={`overflow-x-auto border-t border-zinc-200 dark:border-zinc-800 ${
+          className={`overflow-x-auto border-t border-edge ${
             journalOpen ? "block" : "hidden"
           }`}
         >
         <table className="w-full min-w-[72rem] text-left text-sm">
-          <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
+          <thead className="border-b border-edge bg-surface-2 text-xs uppercase tracking-wide text-ink-muted">
             <tr>
               <SortTh
                 label="Underlying"
@@ -1203,7 +1211,7 @@ export default function DashboardClient({
           </tbody>
         </table>
         {trades.length === 0 ? (
-          <p className="p-6 text-center text-sm text-zinc-500">
+          <p className="p-6 text-center text-sm text-ink-muted">
             No trades yet. Send a SELL TO OPEN screenshot to your Telegram bot, or
             use <span className="font-medium">Add expired worthless</span> below if
             you have no screenshot.
@@ -1225,12 +1233,12 @@ function StatCard({
   valueClassName?: string;
 }) {
   return (
-    <div className="flex h-full flex-col rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">
+    <div className="flex h-full flex-col rounded-xl border border-edge bg-surface p-4">
+      <p className="text-xs font-medium uppercase text-ink-muted">
         {label}
       </p>
       <p
-        className={`mt-1 text-2xl font-semibold tabular-nums ${valueClassName ?? "text-zinc-900 dark:text-zinc-50"}`}
+        className={`mt-1 text-2xl font-semibold tabular-nums ${valueClassName ?? "text-ink"}`}
       >
         {value}
       </p>
@@ -1261,16 +1269,16 @@ function AccountSnapshotsSection(props: {
   }
 
   const body = !hasData ? (
-    <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+    <p className="mt-2 text-xs text-ink-muted">
       Send IBKR Balances screenshot to Telegram with caption{" "}
       <span className="font-medium">balance</span>, then Portfolio → Positions
       with caption <span className="font-medium">position</span>.
     </p>
   ) : compact ? (
-    <div className="mt-2 space-y-1.5 text-sm leading-snug text-zinc-700 dark:text-zinc-300">
+    <div className="mt-2 space-y-1.5 text-sm leading-snug text-ink-soft">
       {snapshots?.balance ? (
         <p>
-          <span className="text-xs font-medium uppercase text-zinc-500">Bal</span>{" "}
+          <span className="text-xs font-medium uppercase text-ink-muted">Bal</span>{" "}
           {fmtSnap(snapshots.balance.netLiquidation, snapshots.balance.currency)}{" "}
           · excess{" "}
           {fmtSnap(snapshots.balance.excessLiquidity, snapshots.balance.currency)}
@@ -1278,7 +1286,7 @@ function AccountSnapshotsSection(props: {
       ) : null}
       {snapshots?.position ? (
         <p>
-          <span className="text-xs font-medium uppercase text-zinc-500">Pos</span>{" "}
+          <span className="text-xs font-medium uppercase text-ink-muted">Pos</span>{" "}
           {snapshots.position.positions?.length ?? 0} lines · maint{" "}
           {fmtSnap(
             snapshots.position.maintenanceMargin,
@@ -1286,7 +1294,7 @@ function AccountSnapshotsSection(props: {
           )}
         </p>
       ) : null}
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-ink-muted">
         {snapshots?.balance ? fmtWhen(snapshots.balance.createdAt) : null}
         {snapshots?.balance && snapshots?.position ? " · " : null}
         {snapshots?.position ? fmtWhen(snapshots.position.createdAt) : null}
@@ -1295,9 +1303,9 @@ function AccountSnapshotsSection(props: {
   ) : (
     <div className="mt-2 space-y-2">
       {snapshots?.balance ? (
-        <div className="rounded-lg border border-zinc-200 p-2.5 dark:border-zinc-700">
-          <p className="text-xs font-medium uppercase text-zinc-500">Balance</p>
-          <p className="mt-0.5 text-xs text-zinc-500">
+        <div className="rounded-lg border border-edge p-2.5">
+          <p className="text-xs font-medium uppercase text-ink-muted">Balance</p>
+          <p className="mt-0.5 text-xs text-ink-muted">
             {fmtWhen(snapshots.balance.createdAt)}
             {snapshots.balance.needsReview ? " · needs review" : ""}
           </p>
@@ -1325,9 +1333,9 @@ function AccountSnapshotsSection(props: {
         </div>
       ) : null}
       {snapshots?.position ? (
-        <div className="rounded-lg border border-zinc-200 p-2.5 dark:border-zinc-700">
-          <p className="text-xs font-medium uppercase text-zinc-500">Position</p>
-          <p className="mt-0.5 text-xs text-zinc-500">
+        <div className="rounded-lg border border-edge p-2.5">
+          <p className="text-xs font-medium uppercase text-ink-muted">Position</p>
+          <p className="mt-0.5 text-xs text-ink-muted">
             {fmtWhen(snapshots.position.createdAt)}
             {snapshots.position.needsReview ? " · needs review" : ""}
           </p>
@@ -1355,10 +1363,10 @@ function AccountSnapshotsSection(props: {
 
   return (
     <div
-      className={`flex h-full flex-col rounded-xl border bg-white dark:bg-zinc-900 ${
+      className={`flex h-full flex-col rounded-xl border bg-surface ${
         hasData
-          ? "border-zinc-200 dark:border-zinc-800"
-          : "border-dashed border-zinc-300 dark:border-zinc-700"
+          ? "border-edge"
+          : "border-dashed border-edge-strong"
       }`}
     >
       <button
@@ -1368,10 +1376,10 @@ function AccountSnapshotsSection(props: {
         className="flex w-full items-start justify-between gap-2 p-4 text-left lg:pointer-events-none"
       >
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          <h2 className="text-sm font-semibold text-ink">
             Account snapshots
           </h2>
-          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="mt-0.5 text-xs text-ink-muted">
             {hasData
               ? compact
                 ? "Latest IBKR uploads via Telegram."
@@ -1380,7 +1388,7 @@ function AccountSnapshotsSection(props: {
           </p>
         </div>
         <span
-          className="mt-0.5 shrink-0 text-xs text-zinc-400 lg:hidden"
+          className="mt-0.5 shrink-0 text-xs text-ink-muted lg:hidden"
           aria-hidden
         >
           {open ? "▲" : "▼"}
@@ -1456,32 +1464,32 @@ function WeeklyCoachSection(props: {
       case "generic_memory":
         return "border-orange-300/60 bg-orange-50 text-orange-900 dark:border-orange-800/60 dark:bg-orange-950/30 dark:text-orange-200";
       default:
-        return "border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300";
+        return "border-edge bg-surface-2 text-ink-soft";
     }
   }
 
   const busy = generating || coachBusy;
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+    <section className="rounded-xl border border-edge bg-surface">
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-start justify-between gap-2 p-4 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+        className="flex w-full items-start justify-between gap-2 p-4 text-left hover:bg-surface-hover"
       >
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          <h2 className="text-sm font-semibold text-ink">
             Weekly coach
           </h2>
-          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="mt-0.5 text-xs text-ink-muted">
             {review
               ? `Latest review · week ending ${review.weekEnding} · click to ${open ? "collapse" : "expand"}`
               : `Margin & concentration review · click to ${open ? "collapse" : "expand"}`}
           </p>
         </div>
         <span
-          className="mt-0.5 shrink-0 text-xs text-zinc-400"
+          className="mt-0.5 shrink-0 text-xs text-ink-muted"
           aria-hidden
         >
           {open ? "▲" : "▼"}
@@ -1489,14 +1497,14 @@ function WeeklyCoachSection(props: {
       </button>
 
       <div className={`px-4 pb-4 ${open ? "block" : "hidden"}`}>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="text-xs text-ink-muted">
           Risk review from trades + account snapshots. Coach logic v
           {COACH_LOGIC_VERSION}.{" "}
-          <span className="font-medium text-zinc-600 dark:text-zinc-300">
+          <span className="font-medium text-ink-soft">
             Full review
           </span>{" "}
           = narrative + fact sheet.{" "}
-          <span className="font-medium text-zinc-600 dark:text-zinc-300">
+          <span className="font-medium text-ink-soft">
             Coach memory
           </span>{" "}
           = bullets for the next run.
@@ -1524,7 +1532,7 @@ function WeeklyCoachSection(props: {
         <div className="mt-3">
           <label
             htmlFor="coach-profile"
-            className="text-xs font-medium text-zinc-700 dark:text-zinc-300"
+            className="text-xs font-medium text-ink-soft"
           >
             Coach profile
           </label>
@@ -1533,7 +1541,7 @@ function WeeklyCoachSection(props: {
             rows={3}
             value={profileNotes}
             onChange={(e) => onProfileChange(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-200"
+            className="mt-1 w-full rounded-lg border border-edge-strong bg-field px-3 py-2 text-sm text-ink-soft"
             placeholder="How should the coach interpret your portfolio?"
           />
           <div className="mt-2 flex flex-wrap gap-2">
@@ -1541,7 +1549,7 @@ function WeeklyCoachSection(props: {
               type="button"
               disabled={!profileDirty || savingProfile}
               onClick={onSaveProfile}
-              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-800 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-200"
+              className="rounded-lg border border-edge-strong px-3 py-1.5 text-sm text-ink-soft disabled:opacity-50"
             >
               {savingProfile ? "Saving…" : "Save profile"}
             </button>
@@ -1553,7 +1561,7 @@ function WeeklyCoachSection(props: {
             type="button"
             disabled={busy}
             onClick={onGenerate}
-            className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm text-white disabled:opacity-60 dark:bg-emerald-600"
+            className="rounded-lg bg-accent-solid px-3 py-1.5 text-sm text-white disabled:opacity-60"
           >
             {generating
               ? "Generating…"
@@ -1567,7 +1575,7 @@ function WeeklyCoachSection(props: {
                 type="button"
                 onClick={onDownloadFull}
                 title="Full review: narrative, memory, and fact sheet JSON"
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-800 dark:border-zinc-600 dark:text-zinc-200"
+                className="rounded-lg border border-edge-strong px-3 py-1.5 text-sm text-ink-soft"
               >
                 Full review (.md)
               </button>
@@ -1575,7 +1583,7 @@ function WeeklyCoachSection(props: {
                 type="button"
                 onClick={onDownloadMemory}
                 title="Coach memory only: compact bullets for another LLM"
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-800 dark:border-zinc-600 dark:text-zinc-200"
+                className="rounded-lg border border-edge-strong px-3 py-1.5 text-sm text-ink-soft"
               >
                 Coach memory (.md)
               </button>
@@ -1585,7 +1593,7 @@ function WeeklyCoachSection(props: {
             type="button"
             disabled={busy}
             onClick={() => onArchiveAndContinue(true)}
-            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-800 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-200"
+            className="rounded-lg border border-edge-strong px-3 py-1.5 text-sm text-ink-soft disabled:opacity-50"
           >
             Archive &amp; continue
           </button>
@@ -1610,19 +1618,19 @@ function WeeklyCoachSection(props: {
 
         {review ? (
           <div className="mt-4 space-y-3">
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-ink-muted">
               Week ending {review.weekEnding} · {fmtWhen(review.generatedAt)} ·{" "}
               {review.model}
               {review.coachLogicVersion != null
                 ? ` · coach v${review.coachLogicVersion}`
                 : ""}
             </p>
-            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm leading-relaxed whitespace-pre-wrap text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">
+            <div className="rounded-lg border border-edge bg-surface-2 p-4 text-sm leading-relaxed whitespace-pre-wrap text-ink-soft">
               {review.narrativeMarkdown}
             </div>
             {showOpenQuestionFooter ? (
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                <span className="font-medium text-zinc-800 dark:text-zinc-200">
+              <p className="text-sm text-ink-muted">
+                <span className="font-medium text-ink">
                   Open question:
                 </span>{" "}
                 {review.openQuestion}
@@ -1630,7 +1638,7 @@ function WeeklyCoachSection(props: {
             ) : null}
           </div>
         ) : (
-          <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="mt-3 text-sm text-ink-muted">
             No review yet. Upload balance + position snapshots via Telegram,
             then Generate review.
           </p>
@@ -1843,23 +1851,23 @@ function TradeTableRow(props: {
   if (editing) {
     return (
       <>
-        <tr className="border-b border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/80">
+        <tr className="border-b border-edge-soft bg-surface-2">
           <td colSpan={COLS} className="px-3 py-3">
             <div className="flex flex-wrap items-end gap-3">
-              <label className="text-xs font-medium text-zinc-500">
+              <label className="text-xs font-medium text-ink-muted">
                 Underlying
                 <input
-                  className="mt-0.5 block w-24 rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  className="mt-0.5 block w-24 rounded border border-edge-strong bg-field px-2 py-1 text-sm text-ink"
                   value={draft.underlying}
                   onChange={(e) =>
                     setDraft((d) => ({ ...d, underlying: e.target.value }))
                   }
                 />
               </label>
-              <label className="text-xs font-medium text-zinc-500">
+              <label className="text-xs font-medium text-ink-muted">
                 Action
                 <input
-                  className="mt-0.5 block w-40 rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  className="mt-0.5 block w-40 rounded border border-edge-strong bg-field px-2 py-1 text-sm text-ink"
                   value={draft.side}
                   onChange={(e) =>
                     setDraft((d) => ({ ...d, side: e.target.value }))
@@ -1867,10 +1875,10 @@ function TradeTableRow(props: {
                   placeholder="e.g. SELL TO OPEN"
                 />
               </label>
-              <label className="text-xs font-medium text-zinc-500">
+              <label className="text-xs font-medium text-ink-muted">
                 Type
                 <select
-                  className="mt-0.5 block w-24 rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  className="mt-0.5 block w-24 rounded border border-edge-strong bg-field px-2 py-1 text-sm text-ink"
                   value={draft.optionType}
                   onChange={(e) =>
                     setDraft((d) => ({ ...d, optionType: e.target.value }))
@@ -1882,22 +1890,22 @@ function TradeTableRow(props: {
                   <option value="unknown">Unknown</option>
                 </select>
               </label>
-              <label className="text-xs font-medium text-zinc-500">
+              <label className="text-xs font-medium text-ink-muted">
                 Expiration
                 <input
                   type="date"
-                  className="mt-0.5 block rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  className="mt-0.5 block rounded border border-edge-strong bg-field px-2 py-1 text-sm text-ink"
                   value={draft.expiration}
                   onChange={(e) =>
                     setDraft((d) => ({ ...d, expiration: e.target.value }))
                   }
                 />
               </label>
-              <label className="text-xs font-medium text-zinc-500">
+              <label className="text-xs font-medium text-ink-muted">
                 P&amp;L date
                 <input
                   type="date"
-                  className="mt-0.5 block rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  className="mt-0.5 block rounded border border-edge-strong bg-field px-2 py-1 text-sm text-ink"
                   value={draft.pnlDate}
                   onChange={(e) =>
                     setDraft((d) => ({ ...d, pnlDate: e.target.value }))
@@ -1905,20 +1913,20 @@ function TradeTableRow(props: {
                   title="Month this P&L counts toward (defaults to date entered)"
                 />
               </label>
-              <label className="text-xs font-medium text-zinc-500">
+              <label className="text-xs font-medium text-ink-muted">
                 Price
                 <input
-                  className="mt-0.5 block w-24 rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  className="mt-0.5 block w-24 rounded border border-edge-strong bg-field px-2 py-1 text-sm text-ink"
                   value={draft.price}
                   onChange={(e) =>
                     setDraft((d) => ({ ...d, price: e.target.value }))
                   }
                 />
               </label>
-              <label className="text-xs font-medium text-zinc-500">
+              <label className="text-xs font-medium text-ink-muted">
                 P&amp;L
                 <input
-                  className="mt-0.5 block w-28 rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  className="mt-0.5 block w-28 rounded border border-edge-strong bg-field px-2 py-1 text-sm text-ink"
                   value={draft.realizedPnl}
                   onChange={(e) =>
                     setDraft((d) => ({ ...d, realizedPnl: e.target.value }))
@@ -1926,37 +1934,37 @@ function TradeTableRow(props: {
                   placeholder="Realized"
                 />
               </label>
-              <label className="text-xs font-medium text-zinc-500">
+              <label className="text-xs font-medium text-ink-muted">
                 Strike
                 <input
-                  className="mt-0.5 block w-20 rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  className="mt-0.5 block w-20 rounded border border-edge-strong bg-field px-2 py-1 text-sm text-ink"
                   value={draft.strike}
                   onChange={(e) =>
                     setDraft((d) => ({ ...d, strike: e.target.value }))
                   }
                 />
               </label>
-              <label className="text-xs font-medium text-zinc-500">
+              <label className="text-xs font-medium text-ink-muted">
                 Qty
                 <input
-                  className="mt-0.5 block w-16 rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  className="mt-0.5 block w-16 rounded border border-edge-strong bg-field px-2 py-1 text-sm text-ink"
                   value={draft.quantity}
                   onChange={(e) =>
                     setDraft((d) => ({ ...d, quantity: e.target.value }))
                   }
                 />
               </label>
-              <label className="text-xs font-medium text-zinc-500">
+              <label className="text-xs font-medium text-ink-muted">
                 Fees
                 <input
-                  className="mt-0.5 block w-24 rounded border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                  className="mt-0.5 block w-24 rounded border border-edge-strong bg-field px-2 py-1 text-sm text-ink"
                   value={draft.fees}
                   onChange={(e) =>
                     setDraft((d) => ({ ...d, fees: e.target.value }))
                   }
                 />
               </label>
-              <label className="flex items-center gap-2 pt-4 text-xs text-zinc-600 dark:text-zinc-400">
+              <label className="flex items-center gap-2 pt-4 text-xs text-ink-muted">
                 <input
                   type="checkbox"
                   checked={draft.needsReview}
@@ -1967,31 +1975,31 @@ function TradeTableRow(props: {
                 Needs review
               </label>
             </div>
-            <label className="mt-3 block text-xs font-medium text-zinc-500">
+            <label className="mt-3 block text-xs font-medium text-ink-muted">
               Notes
               <input
-                className="mt-1 w-full max-w-2xl rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                className="mt-1 w-full max-w-2xl rounded border border-edge-strong bg-field px-2 py-1 text-sm"
                 value={draft.notes}
                 onChange={(e) =>
                   setDraft((d) => ({ ...d, notes: e.target.value }))
                 }
               />
             </label>
-            <p className="mt-1 text-[11px] text-zinc-500">
+            <p className="mt-1 text-[11px] text-ink-muted">
               Type: {formatOptionType(t.optionType)} · Exp {t.expiration ?? "—"}{" "}
               · Date entered {dateEntered.toLocaleString()}
             </p>
             <div className="mt-3 flex gap-2">
               <button
                 type="button"
-                className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm text-white dark:bg-emerald-600"
+                className="rounded-lg bg-accent-solid px-3 py-1.5 text-sm text-white"
                 onClick={() => void save()}
               >
                 Save
               </button>
               <button
                 type="button"
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-600"
+                className="rounded-lg border border-edge-strong px-3 py-1.5 text-sm"
                 onClick={() => setEditing(false)}
               >
                 Cancel
@@ -2010,10 +2018,10 @@ function TradeTableRow(props: {
 
   return (
     <>
-      <tr className="border-b border-zinc-100 dark:border-zinc-800">
+      <tr className="border-b border-edge-soft">
         <td className="px-3 py-2.5">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+            <span className="font-semibold text-ink">
               {t.underlying ?? "—"}
             </span>
             {isOpenSide(t.side) && hasUnsetRealizedPnl(t.realizedPnl) ? (
@@ -2028,23 +2036,23 @@ function TradeTableRow(props: {
             ) : null}
           </div>
           {t.strike != null ? (
-            <p className="mt-0.5 text-[11px] text-zinc-500">{t.strike}</p>
+            <p className="mt-0.5 text-[11px] text-ink-muted">{t.strike}</p>
           ) : null}
         </td>
-        <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-zinc-800 dark:text-zinc-200">
+        <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-ink">
           {formatExpiration(t.expiration)}
         </td>
-        <td className="max-w-[10rem] px-3 py-2.5 text-xs leading-snug text-zinc-700 dark:text-zinc-300">
+        <td className="max-w-[10rem] px-3 py-2.5 text-xs leading-snug text-ink-soft">
           {t.side ?? "—"}
         </td>
-        <td className="px-3 py-2.5 text-zinc-800 dark:text-zinc-200">
+        <td className="px-3 py-2.5 text-ink">
           {formatOptionType(t.optionType)}
         </td>
-        <td className="px-3 py-2.5 text-right tabular-nums text-zinc-800 dark:text-zinc-200">
+        <td className="px-3 py-2.5 text-right tabular-nums text-ink">
           {t.price != null ? formatMoney(t.price) : "—"}
         </td>
-        <td className="whitespace-nowrap px-3 py-2.5 text-zinc-600 dark:text-zinc-400">
-          <span className="block text-zinc-900 dark:text-zinc-100">
+        <td className="whitespace-nowrap px-3 py-2.5 text-ink-muted">
+          <span className="block text-ink">
             {dateEntered.toLocaleDateString(undefined, {
               year: "numeric",
               month: "short",
@@ -2058,11 +2066,11 @@ function TradeTableRow(props: {
             })}
           </span>
         </td>
-        <td className="px-3 py-2.5 text-right tabular-nums text-zinc-800 dark:text-zinc-200">
+        <td className="px-3 py-2.5 text-right tabular-nums text-ink">
           {formatMoney(net)}
         </td>
         <td
-          className={`px-3 py-2.5 text-right font-medium ${pnl !== undefined && pnl !== null ? pnlClass(pnl) : "text-zinc-400"}`}
+          className={`px-3 py-2.5 text-right font-medium ${pnl !== undefined && pnl !== null ? pnlClass(pnl) : "text-ink-muted"}`}
         >
           {pnl !== undefined && pnl !== null ? formatMoney(pnl) : "—"}
         </td>
@@ -2086,7 +2094,7 @@ function TradeTableRow(props: {
           ) : null}
           <button
             type="button"
-            className="text-sm text-emerald-700 dark:text-emerald-400"
+            className="text-sm text-accent"
             onClick={() => {
               setDraft(tradeDraftFromTrade(t));
               setEditing(true);
@@ -2104,12 +2112,12 @@ function TradeTableRow(props: {
         </td>
       </tr>
       {worthlessOpen ? (
-        <tr className="border-b border-zinc-100 bg-sky-50 dark:border-zinc-800 dark:bg-sky-950/30">
+        <tr className="border-b border-edge-soft bg-sky-50 dark:bg-sky-950/30">
           <td colSpan={COLS} className="px-3 py-3">
-            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+            <p className="text-sm font-medium text-ink">
               Mark expired worthless
             </p>
-            <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+            <p className="mt-1 text-xs text-ink-muted">
               {t.underlying ?? "—"}{" "}
               {t.strike != null ? `${t.strike} ` : ""}
               {formatOptionType(t.optionType)} · {t.side ?? "—"}
@@ -2125,17 +2133,17 @@ function TradeTableRow(props: {
               </span>
             </p>
             {!t.expiration ? (
-              <label className="mt-3 block text-xs font-medium text-zinc-500">
+              <label className="mt-3 block text-xs font-medium text-ink-muted">
                 Expiration (required for monthly P&amp;L)
                 <input
                   type="date"
-                  className="mt-0.5 block rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                  className="mt-0.5 block rounded border border-edge-strong bg-field px-2 py-1 text-sm"
                   value={worthlessExpiration}
                   onChange={(e) => setWorthlessExpiration(e.target.value)}
                 />
               </label>
             ) : (
-              <p className="mt-2 text-xs text-zinc-500">
+              <p className="mt-2 text-xs text-ink-muted">
                 P&amp;L will count in{" "}
                 {formatMonthKey(t.expiration.slice(0, 7))} (expiration{" "}
                 {t.expiration}).
@@ -2157,7 +2165,7 @@ function TradeTableRow(props: {
               </button>
               <button
                 type="button"
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-600"
+                className="rounded-lg border border-edge-strong px-3 py-1.5 text-sm"
                 onClick={() => setWorthlessOpen(false)}
               >
                 Cancel
@@ -2167,7 +2175,7 @@ function TradeTableRow(props: {
         </tr>
       ) : null}
       {t.ingestError ? (
-        <tr className="border-b border-zinc-100 dark:border-zinc-800">
+        <tr className="border-b border-edge-soft">
           <td
             colSpan={COLS}
             className="px-3 py-1 text-xs text-red-600 dark:text-red-400"
