@@ -3,47 +3,58 @@
 
   **An automated, AI-powered options trade journal and analytics dashboard.**
 
-  [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
-  [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)](https://www.typescriptlang.org/)
+  [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
+  [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://www.typescriptlang.org/)
   [![Convex](https://img.shields.io/badge/Convex-Backend-FF5A5F?logo=convex)](https://www.convex.dev/)
-  [![OpenAI](https://img.shields.io/badge/OpenAI-Vision_LLM-412991?logo=openai)](https://openai.com/)
-  [![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
+  [![OpenAI](https://img.shields.io/badge/OpenAI-Vision_+_Coach-412991?logo=openai)](https://openai.com/)
+  [![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS_4-38B2AC?logo=tailwindcss)](https://tailwindcss.com/)
+  [![Vercel](https://img.shields.io/badge/Vercel-Hosting-000000?logo=vercel)](https://vercel.com/)
 </div>
 
 ---
 
 ## 📖 Overview
 
-**Options Trade Dashboard** solves the friction of manual trade journaling for options traders. Instead of manually entering legs, strikes, and premiums into a spreadsheet, you simply send a screenshot of your **Interactive Brokers (IBKR)** execution screen to a Telegram bot. 
+**Options Trade Dashboard** is a personal Interactive Brokers (IBKR) options journal. Instead of typing legs, strikes, and premiums into a spreadsheet, send a screenshot of an IBKR execution screen to a Telegram bot.
 
-The application automatically downloads the image, processes it through OpenAI's Vision models to extract structured trade data, saves it securely to a Convex database, and visualises your performance on a password-protected Next.js dashboard.
+The app downloads the image, runs OpenAI Vision to extract structured trade data, stores it in Convex, and shows performance on a password-protected Next.js dashboard. You can also send IBKR **balance** or **position** screenshots, generate a weekly AI coach review, and backfill options fills from an IBKR Transaction History CSV.
+
+Production: [https://boptiontracker.vercel.app](https://boptiontracker.vercel.app)
 
 ## 📸 Screenshots
 
 <div align="center">
   <img src="docs/screenshot-dashboard.png" alt="Options Trade Dashboard — Live analytics dashboard showing P&L by month, trades by underlying, Realized P&L charts, and the sortable trade journal" width="100%" />
-  <p><em>The live analytics dashboard — monthly P&L summary, four Recharts visualisations (trades by underlying, trades by month, realized P&L by underlying, realized P&L by month), and the full sortable trade journal with cumulative P&L tracking.</em></p>
+  <p><em>The live analytics dashboard — monthly P&L summary, Recharts visualisations, account snapshots, weekly coach, and the sortable trade journal with cumulative P&L tracking.</em></p>
 </div>
 
 ---
 
 ## ✨ Key Features
 
-- **Automated Telegram Ingest:** Send an IBKR screenshot to your bot; the system handles image extraction, runs vision LLM parsing, and maps the output to a strict database schema.
-- **AI-Powered Data Extraction:** Uses `gpt-4o` to reliably parse complex option legs, identifying underlying assets, option types (call/put), strikes, expirations, execution prices, fees, and Realized P&L.
-- **Interactive Analytics Dashboard:** 
-  - **Live Auto-Refresh:** The dashboard polls for new trades every 5 seconds.
-  - **Visualizations:** View top underlyings by trade count, monthly trade volume, and P&L breakdowns via Recharts.
-  - **Cumulative P&L:** A running cumulative P&L metric that dynamically updates based on your current table sort order.
-- **Editable Trade Journal:** Flag ambiguous extractions for manual review (`needsReview`), edit any parsed field, and add custom strategy tags or notes directly from the UI.
-- **Excel Export:** Download up to 500 filtered, sorted rows into a clean `.xlsx` workbook using `exceljs`, perfect for tax reporting or deeper spreadsheet analysis.
+- **Telegram ingest:** Uncaptioned IBKR trade screenshots become journal rows. Photo + caption `balance` or `position` (optional `/snapshot` prefix, case-insensitive) becomes an account snapshot. Text-only messages are ignored.
+- **Vision extraction:** Defaults to `gpt-4o` for option legs (underlying, call/put, strike, expiration, side, qty, price, fees, realized P&L) and for snapshot OCR (NLA, margin, greeks).
+- **Analytics dashboard:** Monthly P&L, trades and realized P&L by underlying/month, sortable journal (including an **Expiration** column). Negatives show an explicit minus sign. Account snapshots and weekly coach are collapsed by default on mobile.
+- **Event-driven live-sync:** Full fetch on open/reload, after edits, and when Convex `dashboardFeed` bumps (for example after Telegram ingest). Hidden tabs defer refresh until visible. No interval polling.
+- **Editable journal:** Flag `needsReview`, edit fields, add strategy tags/notes, and mark expired-worthless opens (patches the OPEN row; does not create a separate close). Monthly P&L uses `pnlDate ?? createdAt`.
+- **Weekly coach:** On-demand OpenAI review (not on dashboard refresh). Stores narrative + rolling memory; **Start fresh** archives prior reviews and does not wipe trades. Coach logic version lives in `lib/coach-version.ts`.
+- **Excel export:** Up to 500 filtered, sorted rows via `exceljs`.
+- **IBKR CSV import:** `scripts/import-ibkr-transactions.mjs` imports options-only Transaction History rows (deduped; always `--dry-run` first).
 
 ## 🛠️ Tech Stack
 
-- **Frontend:** [Next.js](https://nextjs.org) (App Router), React 19, Tailwind CSS 4
-- **Backend & Database:** [Convex](https://convex.dev) (for real-time queries, mutations, and Node-based server actions)
-- **AI Integration:** [OpenAI](https://openai.com/) API (Vision + JSON Schema extraction)
-- **Charts & Export:** [Recharts](https://recharts.org) and [ExcelJS](https://github.com/exceljs/exceljs)
+| Layer | Stack |
+|---|---|
+| **Frontend** | [Next.js](https://nextjs.org) 16 (App Router), [React](https://react.dev) 19, TypeScript 5, [Tailwind CSS](https://tailwindcss.com) 4 |
+| **Backend & database** | [Convex](https://convex.dev) — schema, queries/mutations, Node actions, file storage |
+| **AI** | [OpenAI](https://openai.com/) API (`gpt-4o` default for vision + weekly coach) |
+| **Charts & export** | [Recharts](https://recharts.org) 3, [ExcelJS](https://github.com/exceljs/exceljs) |
+| **Ingest** | Telegram Bot API (webhook on Next.js). A WhatsApp route exists; Telegram is the live path. |
+| **Hosting** | [Vercel](https://vercel.com) (`boptiontracker`) + Convex Cloud |
+| **Auth** | Shared-secret login (`DASHBOARD_SECRET`) — same string is the dashboard password |
+
+There is no separate Express / Postgres / Prisma layer. Convex is the database and the API.
 
 ## 🚀 Getting Started
 
@@ -63,55 +74,74 @@ The application automatically downloads the image, processes it through OpenAI's
    npm install
    ```
 
-2. **Configure Environment Variables:**
-   Copy the example environment file:
+2. **Configure environment variables:**
    ```bash
    cp .env.example .env.local
    ```
-   *Note: Convex does not read `.env.local`. You must set `OPENAI_API_KEY`, `INGEST_SECRET`, and `DASHBOARD_SECRET` directly in the Convex dashboard for your deployment.*
+   Convex does **not** read `.env.local`. Set `OPENAI_API_KEY`, `INGEST_SECRET`, and `DASHBOARD_SECRET` in the Convex dashboard for the deployment that matches `NEXT_PUBLIC_CONVEX_URL`. Optional: `OPENAI_VISION_MODEL`, `OPENAI_COACH_MODEL`.
 
-3. **Start Convex (Terminal 1):**
+3. **Start Convex (terminal 1):**
    ```bash
    npx convex dev
    ```
-   This syncs your schema and functions to the Convex dev cloud.
+   This syncs schema and functions to your Convex **dev** deployment. Use `npx convex deploy` only for production.
 
-4. **Start Next.js (Terminal 2):**
+4. **Start Next.js (terminal 2):**
    ```bash
    npm run dev
    ```
-   Open [http://localhost:3000](http://localhost:3000), log in using your `DASHBOARD_SECRET`, and navigate to `/dashboard`.
+   Open [http://localhost:3000](http://localhost:3000), log in with `DASHBOARD_SECRET`, and go to `/dashboard`.
 
 ## 🤖 Telegram Webhook Configuration
 
-To enable the automated screenshot pipeline, your app must be reachable via a public HTTPS URL (e.g., deployed on Vercel).
+The webhook needs a public HTTPS URL (local `npm run dev` alone is not enough for Telegram).
 
-1. Set `PUBLIC_APP_URL` in `.env.local` to your live domain (e.g., `https://your-app.vercel.app`).
-2. Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` in both `.env.local` and your production hosting environment.
-3. Register the webhook by running:
+1. Set `PUBLIC_APP_URL` in `.env.local` to the live origin (e.g. `https://boptiontracker.vercel.app`).
+2. Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` in `.env.local` and on Vercel.
+3. Register the webhook:
    ```bash
    npm run telegram:set-webhook
    ```
-4. Send a photo to your Telegram bot to trigger the ingest pipeline. *(Note: Text messages are ignored by the webhook).*
+4. Send a photo to the bot:
+   - **No caption** → trade OCR
+   - Caption `balance` or `position` → account snapshot OCR
+   - Text-only messages are ignored
+
+## 📥 IBKR CSV import
+
+For backfills, use IBKR **Transaction History** CSV (options only):
+
+```bash
+node scripts/import-ibkr-transactions.mjs /path/to/file.csv --dry-run
+```
+
+Review the dry-run output, then rerun without `--dry-run`. Rows dedupe on `date|underlying|expiration|strike|side|qty|price`. Worthless expirations have no IBKR close fill — patch the existing OPEN row (`realizedPnl`, `pnlDate` = expiration) instead of inserting a close.
 
 ## 🔒 Security & Environment Variables
 
 | Variable | Location | Purpose |
 |----------|----------|---------|
-| `NEXT_PUBLIC_CONVEX_URL` | Next.js (`.env.local`, Vercel) | Connects the client/server to your Convex instance. |
-| `DASHBOARD_SECRET` | Next.js **&** Convex | The password to access the dashboard and secure API routes. |
-| `INGEST_SECRET` | Next.js **&** Convex | Shared secret authenticating Telegram webhook calls to Convex. |
-| `OPENAI_API_KEY` | **Convex Dashboard Only** | Used in `convex/ingest.ts` for vision extraction. |
-| `TELEGRAM_BOT_TOKEN` | Next.js (Vercel) | Required to fetch images from Telegram. |
-| `TELEGRAM_WEBHOOK_SECRET`| Next.js (Vercel) | Validates incoming requests from Telegram. |
+| `NEXT_PUBLIC_CONVEX_URL` | Next.js (`.env.local`, Vercel) | Convex deployment the app talks to. Must match the dashboard you configure. |
+| `DASHBOARD_SECRET` | Next.js **and** Convex | Dashboard login password and API auth. |
+| `INGEST_SECRET` | Next.js **and** Convex | Shared secret for Telegram → Convex ingest. |
+| `OPENAI_API_KEY` | **Convex dashboard only** | Vision ingest and weekly coach. |
+| `OPENAI_VISION_MODEL` | Convex dashboard (optional) | Defaults to `gpt-4o`. |
+| `OPENAI_COACH_MODEL` | Convex dashboard (optional) | Defaults to `gpt-4o`. |
+| `TELEGRAM_BOT_TOKEN` | Next.js (Vercel) | Download photos from Telegram. |
+| `TELEGRAM_WEBHOOK_SECRET` | Next.js (Vercel) | Validates incoming Telegram webhook requests. |
+| `PUBLIC_APP_URL` | Next.js (`.env.local`) | HTTPS origin used by `npm run telegram:set-webhook`. |
 
-*Helper scripts like `npm run convex:sync-secrets` are provided to push local secrets to your Convex dev environment.*
+Helpers:
+
+- `npm run convex:sync-secrets` / `npm run convex:sync-secrets:prod` — push local secrets to Convex
+- `npm run vercel:push-env` — push env vars to Vercel
+
+Vercel production uses project env vars, not `.env.local`. Redeploy after changing them. `git push origin main` deploys the Next app; Convex schema/function changes also need `npx convex dev --once` (dev) or a production Convex deploy against the same `NEXT_PUBLIC_CONVEX_URL`.
 
 ## 📚 Documentation & Maintenance
 
-For ongoing maintenance, operations, and contributor guidelines, please refer to the internal documentation:
 - [`AGENTS.md`](AGENTS.md): Learned preferences, workspace facts, and AI contributor rules.
-- [`docs/CLOSEOUT.md`](docs/CLOSEOUT.md): Pre-deployment checklists, linting, secret rotation, and handoff procedures.
+- [`docs/CLOSEOUT.md`](docs/CLOSEOUT.md): Lint, build, Convex `tsc`, prod env checks, and optional git tags.
 
 ## 📄 License
 
