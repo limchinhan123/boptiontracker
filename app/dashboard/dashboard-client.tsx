@@ -498,6 +498,7 @@ export default function DashboardClient({
   const [err, setErr] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [journalOpen, setJournalOpen] = useState(false);
   const underlyingRef = useRef(underlying);
   const needsReviewOnlyRef = useRef(needsReviewOnly);
   const profileDirtyRef = useRef(profileDirty);
@@ -1090,7 +1091,33 @@ export default function DashboardClient({
 
       <ManualAddWorthlessSection onCreated={() => void refreshDashboardData()} />
 
-      <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <button
+          type="button"
+          aria-expanded={journalOpen}
+          onClick={() => setJournalOpen((v) => !v)}
+          className="flex w-full items-start justify-between gap-2 p-4 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+        >
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              Trade journal
+            </h2>
+            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+              {trades.length} trade{trades.length === 1 ? "" : "s"}
+              {needsReviewOnly ? " · needs review only" : ""}
+              {underlying.trim() ? ` · ${underlying.trim()}` : ""}
+              {` · click to ${journalOpen ? "collapse" : "expand"}`}
+            </p>
+          </div>
+          <span className="mt-0.5 shrink-0 text-xs text-zinc-400" aria-hidden>
+            {journalOpen ? "▲" : "▼"}
+          </span>
+        </button>
+        <div
+          className={`overflow-x-auto border-t border-zinc-200 dark:border-zinc-800 ${
+            journalOpen ? "block" : "hidden"
+          }`}
+        >
         <table className="w-full min-w-[72rem] text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
             <tr>
@@ -1182,7 +1209,8 @@ export default function DashboardClient({
             you have no screenshot.
           </p>
         ) : null}
-      </div>
+        </div>
+      </section>
     </div>
   );
 }
