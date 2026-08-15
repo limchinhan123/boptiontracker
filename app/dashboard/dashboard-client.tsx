@@ -958,39 +958,15 @@ export default function DashboardClient({
       </header>
 
       {stats ? (
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:items-stretch">
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <StatCard label="Total trades" value={String(stats.totalTrades)} />
           <StatCard
             label="Total profit & loss"
             value={formatMoney(stats.totalRealizedPnl)}
             valueClassName={pnlClass(stats.totalRealizedPnl)}
           />
-          <AccountSnapshotsSection snapshots={snapshots} compact />
         </section>
-      ) : (
-        <AccountSnapshotsSection snapshots={snapshots} />
-      )}
-
-      <WeeklyCoachSection
-        review={review}
-        health={coachHealth}
-        profileNotes={profileNotes}
-        profileDirty={profileDirty}
-        savingProfile={savingProfile}
-        archivedReviewCount={archivedReviewCount}
-        generating={generatingReview}
-        coachBusy={coachBusy}
-        onProfileChange={(notes) => {
-          setProfileNotes(notes);
-          setProfileDirty(true);
-        }}
-        onSaveProfile={() => void saveCoachProfile()}
-        onGenerate={() => void generateReview()}
-        onArchiveAndContinue={(gen) => void archiveAndContinue(gen)}
-        onStartFresh={() => void startFreshCoach()}
-        onDownloadFull={() => downloadReview("full")}
-        onDownloadMemory={() => downloadReview("memory")}
-      />
+      ) : null}
 
       {monthPnlRows.length > 0 ? (
         <section className="rounded-xl border border-edge bg-surface p-4">
@@ -1033,6 +1009,29 @@ export default function DashboardClient({
           </div>
         </section>
       ) : null}
+
+      <AccountSnapshotsSection snapshots={snapshots} />
+
+      <WeeklyCoachSection
+        review={review}
+        health={coachHealth}
+        profileNotes={profileNotes}
+        profileDirty={profileDirty}
+        savingProfile={savingProfile}
+        archivedReviewCount={archivedReviewCount}
+        generating={generatingReview}
+        coachBusy={coachBusy}
+        onProfileChange={(notes) => {
+          setProfileNotes(notes);
+          setProfileDirty(true);
+        }}
+        onSaveProfile={() => void saveCoachProfile()}
+        onGenerate={() => void generateReview()}
+        onArchiveAndContinue={(gen) => void archiveAndContinue(gen)}
+        onStartFresh={() => void startFreshCoach()}
+        onDownloadFull={() => downloadReview("full")}
+        onDownloadMemory={() => downloadReview("memory")}
+      />
 
       <DashboardCharts
         byUnderlying={stats?.byUnderlying ?? []}
@@ -1248,9 +1247,8 @@ function StatCard({
 
 function AccountSnapshotsSection(props: {
   snapshots: LatestSnapshots | null;
-  compact?: boolean;
 }) {
-  const { snapshots, compact = false } = props;
+  const { snapshots } = props;
   const [open, setOpen] = useState(false);
   const hasData = Boolean(snapshots?.balance || snapshots?.position);
 
@@ -1274,32 +1272,6 @@ function AccountSnapshotsSection(props: {
       <span className="font-medium">balance</span>, then Portfolio → Positions
       with caption <span className="font-medium">position</span>.
     </p>
-  ) : compact ? (
-    <div className="mt-2 space-y-1.5 text-sm leading-snug text-ink-soft">
-      {snapshots?.balance ? (
-        <p>
-          <span className="text-xs font-medium uppercase text-ink-muted">Bal</span>{" "}
-          {fmtSnap(snapshots.balance.netLiquidation, snapshots.balance.currency)}{" "}
-          · excess{" "}
-          {fmtSnap(snapshots.balance.excessLiquidity, snapshots.balance.currency)}
-        </p>
-      ) : null}
-      {snapshots?.position ? (
-        <p>
-          <span className="text-xs font-medium uppercase text-ink-muted">Pos</span>{" "}
-          {snapshots.position.positions?.length ?? 0} lines · maint{" "}
-          {fmtSnap(
-            snapshots.position.maintenanceMargin,
-            snapshots.position.currency,
-          )}
-        </p>
-      ) : null}
-      <p className="text-xs text-ink-muted">
-        {snapshots?.balance ? fmtWhen(snapshots.balance.createdAt) : null}
-        {snapshots?.balance && snapshots?.position ? " · " : null}
-        {snapshots?.position ? fmtWhen(snapshots.position.createdAt) : null}
-      </p>
-    </div>
   ) : (
     <div className="mt-2 space-y-2">
       {snapshots?.balance ? (
@@ -1373,7 +1345,7 @@ function AccountSnapshotsSection(props: {
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-start justify-between gap-2 p-4 text-left lg:pointer-events-none"
+        className="flex w-full items-start justify-between gap-2 p-4 text-left hover:bg-surface-hover"
       >
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-ink">
@@ -1381,20 +1353,18 @@ function AccountSnapshotsSection(props: {
           </h2>
           <p className="mt-0.5 text-xs text-ink-muted">
             {hasData
-              ? compact
-                ? "Latest IBKR uploads via Telegram."
-                : "Latest Telegram uploads (caption balance / position)."
-              : "Optional — tap to set up."}
+              ? `Latest Telegram uploads · click to ${open ? "collapse" : "expand"}`
+              : `Optional — click to ${open ? "collapse" : "expand"}`}
           </p>
         </div>
         <span
-          className="mt-0.5 shrink-0 text-xs text-ink-muted lg:hidden"
+          className="mt-0.5 shrink-0 text-xs text-ink-muted"
           aria-hidden
         >
           {open ? "▲" : "▼"}
         </span>
       </button>
-      <div className={`px-4 pb-4 ${open ? "block" : "hidden"} lg:block`}>
+      <div className={`px-4 pb-4 ${open ? "block" : "hidden"}`}>
         {body}
       </div>
     </div>
