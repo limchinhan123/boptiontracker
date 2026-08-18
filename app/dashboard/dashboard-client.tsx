@@ -507,6 +507,10 @@ export default function DashboardClient({
   const [sortKey, setSortKey] = useState<SortKey>("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [journalOpen, setJournalOpen] = useState(false);
+  const [sgdRate, setSgdRate] = useState<{ rate: number; date: string } | null>(
+    null,
+  );
+  const [sgdRateFailed, setSgdRateFailed] = useState(false);
   const underlyingRef = useRef(underlying);
   const needsReviewOnlyRef = useRef(needsReviewOnly);
   const profileDirtyRef = useRef(profileDirty);
@@ -522,6 +526,34 @@ export default function DashboardClient({
   useEffect(() => {
     profileDirtyRef.current = profileDirty;
   }, [profileDirty]);
+
+  // Daily ECB reference rate for the SGD column (free, no API key).
+  useEffect(() => {
+    let cancelled = false;
+    async function loadSgdRate() {
+      try {
+        const res = await fetch(
+          "https://api.frankfurter.dev/v1/latest?base=USD&symbols=SGD",
+        );
+        if (!res.ok) throw new Error(`Rate fetch failed (${res.status})`);
+        const data = (await res.json()) as {
+          date?: string;
+          rates?: { SGD?: number };
+        };
+        const rate = data.rates?.SGD;
+        if (typeof rate !== "number" || !(rate > 0)) {
+          throw new Error("Rate missing in response");
+        }
+        if (!cancelled) setSgdRate({ rate, date: data.date ?? "" });
+      } catch {
+        if (!cancelled) setSgdRateFailed(true);
+      }
+    }
+    void loadSgdRate();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const load = useCallback(async (
     filters?: DashboardLoadFilters,
@@ -977,12 +1009,15 @@ export default function DashboardClient({
             Realized P&amp;L grouped by calendar month (uses expiration / P&amp;L date when set).
           </p>
           <div className="mt-3 overflow-x-auto">
-            <table className="w-full min-w-[18rem] text-sm">
+            <table className="w-full min-w-[26rem] text-sm">
               <thead>
                 <tr className="border-b border-edge text-left text-xs uppercase tracking-wide text-ink-muted">
                   <th className="py-2 pr-4 font-medium">Month</th>
                   <th className="py-2 pr-4 text-right font-medium">Trades</th>
-                  <th className="py-2 text-right font-medium">P&amp;L</th>
+                  <th className="py-2 pr-4 text-right font-medium">
+                    P&amp;L (USD)
+                  </th>
+                  <th className="py-2 text-right font-medium">P&amp;L (SGD)</th>
                 </tr>
               </thead>
               <tbody>
@@ -998,15 +1033,29 @@ export default function DashboardClient({
                       {row.count}
                     </td>
                     <td
-                      className={`py-2 text-right font-medium tabular-nums ${pnlClass(row.pnl)}`}
+                      className={`py-2 pr-4 text-right font-medium tabular-nums ${pnlClass(row.pnl)}`}
                     >
                       {formatMoney(row.pnl)}
+                    </td>
+                    <td
+                      className={`py-2 text-right font-medium tabular-nums ${pnlClass(row.pnl)}`}
+                    >
+                      {sgdRate
+                        ? formatMoney(row.pnl * sgdRate.rate, "SGD")
+                        : "—"}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <p className="mt-2 text-[11px] text-ink-muted">
+            {sgdRate
+              ? `SGD converted at 1 USD = ${sgdRate.rate.toFixed(4)} SGD (ECB reference rate, ${sgdRate.date}). All months use today's rate.`
+              : sgdRateFailed
+                ? "SGD rate unavailable right now — showing USD only."
+                : "Fetching USD → SGD rate…"}
+          </p>
         </section>
       ) : null}
 
