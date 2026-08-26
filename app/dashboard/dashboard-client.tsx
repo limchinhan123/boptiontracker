@@ -75,6 +75,19 @@ function formatMoney(
   }).format(n);
 }
 
+/** Compact table amounts so mobile can show USD + SGD without sideways scroll. */
+function formatCompactMoney(
+  n: number | null | undefined,
+  prefix: string,
+): string {
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  const formatted = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Math.abs(n));
+  return `${n < 0 ? "-" : ""}${prefix}${formatted}`;
+}
+
 function formatOptionType(t?: TradeRow["optionType"]): string {
   if (t === "call") return "Call";
   if (t === "put") return "Put";
@@ -1001,23 +1014,36 @@ export default function DashboardClient({
       ) : null}
 
       {monthPnlRows.length > 0 ? (
-        <section className="rounded-xl border border-edge bg-surface p-4">
+        <section className="rounded-xl border border-edge bg-surface p-3 sm:p-4">
           <h2 className="text-sm font-semibold text-ink">
             Profit &amp; loss by month
           </h2>
           <p className="mt-0.5 text-xs text-ink-muted">
             Realized P&amp;L grouped by calendar month (uses expiration / P&amp;L date when set).
           </p>
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full min-w-[26rem] text-sm">
+          <div className="mt-3">
+            <table className="w-full table-fixed text-[11px] sm:text-sm">
+              <colgroup>
+                <col className="w-[26%]" />
+                <col className="w-[12%]" />
+                <col className="w-[31%]" />
+                <col className="w-[31%]" />
+              </colgroup>
               <thead>
-                <tr className="border-b border-edge text-left text-xs uppercase tracking-wide text-ink-muted">
-                  <th className="py-2 pr-4 font-medium">Month</th>
-                  <th className="py-2 pr-4 text-right font-medium">Trades</th>
-                  <th className="py-2 pr-4 text-right font-medium">
-                    P&amp;L (USD)
+                <tr className="border-b border-edge text-left text-[10px] uppercase tracking-wide text-ink-muted sm:text-xs">
+                  <th className="py-2 pr-1.5 font-medium sm:pr-4">Month</th>
+                  <th className="py-2 pr-1.5 text-right font-medium sm:pr-4">
+                    <span className="sm:hidden">#</span>
+                    <span className="hidden sm:inline">Trades</span>
                   </th>
-                  <th className="py-2 text-right font-medium">P&amp;L (SGD)</th>
+                  <th className="py-2 pr-1.5 text-right font-medium sm:pr-4">
+                    <span className="sm:hidden">USD</span>
+                    <span className="hidden sm:inline">P&amp;L (USD)</span>
+                  </th>
+                  <th className="py-2 text-right font-medium">
+                    <span className="sm:hidden">SGD</span>
+                    <span className="hidden sm:inline">P&amp;L (SGD)</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -1026,22 +1052,22 @@ export default function DashboardClient({
                     key={row.month}
                     className="border-b border-edge-soft"
                   >
-                    <td className="py-2 pr-4 text-ink">
+                    <td className="py-2 pr-1.5 whitespace-nowrap text-ink sm:pr-4">
                       {formatMonthKey(row.month)}
                     </td>
-                    <td className="py-2 pr-4 text-right tabular-nums text-ink-soft">
+                    <td className="py-2 pr-1.5 text-right tabular-nums text-ink-soft sm:pr-4">
                       {row.count}
                     </td>
                     <td
-                      className={`py-2 pr-4 text-right font-medium tabular-nums ${pnlClass(row.pnl)}`}
+                      className={`py-2 pr-1.5 text-right font-medium tabular-nums tracking-tight whitespace-nowrap sm:pr-4 ${pnlClass(row.pnl)}`}
                     >
-                      {formatMoney(row.pnl)}
+                      {formatCompactMoney(row.pnl, "$")}
                     </td>
                     <td
-                      className={`py-2 text-right font-medium tabular-nums ${pnlClass(row.pnl)}`}
+                      className={`py-2 text-right font-medium tabular-nums tracking-tight whitespace-nowrap ${pnlClass(row.pnl)}`}
                     >
                       {sgdRate
-                        ? formatMoney(row.pnl * sgdRate.rate, "SGD")
+                        ? formatCompactMoney(row.pnl * sgdRate.rate, "S$")
                         : "—"}
                     </td>
                   </tr>
